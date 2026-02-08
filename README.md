@@ -6,7 +6,7 @@ Aplicação para conciliação de parcelas financeiras usando Google Sheets. Com
 
 - Go 1.21+
 - Google Cloud Service Account com a API do Sheets habilitada.
-- Arquivo `credentials.json` na raiz do projeto.
+- Arquivo de Service Account (JSON) na raiz do projeto.
 - ID da Planilha Google.
 
 ## Estrutura da Planilha
@@ -18,23 +18,31 @@ A aplicação espera as seguintes abas na planilha:
 
 ## Configuração
 
-1. **Credenciais**: Coloque o arquivo `credentials.json` (Service Account Key) na raiz do projeto (`/home/xavier10/workspace/olivia-installments-conciliation/`).
-2. **Variáveis de Ambiente**:
-   Você pode configurar via linha de comando ao executar.
+1. **Credenciais**: Coloque o arquivo de Service Account (JSON) na raiz do projeto.
+2. **Variáveis de Ambiente (preferencialmente via `.env`)**:
+   Crie um arquivo `.env` na raiz com as variáveis abaixo:
+
+```
+GOOGLE_APPLICATION_CREDENTIALS="olivia-service-account-key.json"
+SPREADSHEET_ID="seu-id-da-planilha-aqui"
+SHEET_ES="Entradas e Saídas"
+SHEET_DIF="Diferença"
+SHEET_REJ="Rejeitados"
+PORT=8080
+```
+
+Se preferir, você também pode exportar as variáveis manualmente no terminal.
 
 ## Execução
 
 ### Backend
 
-Execute o servidor Go na porta 8080:
+Execute o servidor Go na porta 8080 (carregando as variáveis do `.env`):
 
 ```bash
-export GOOGLE_APPLICATION_CREDENTIALS="credentials.json"
-export SPREADSHEET_ID="seu-id-da-planilha-aqui"
-export SHEET_ES="Entradas e Saídas"
-export SHEET_DIF="Diferença"
-export SHEET_REJ="Rejeitados"
-export PORT=8080
+set -a
+source .env
+set +a
 
 go run backend/main.go
 ```
