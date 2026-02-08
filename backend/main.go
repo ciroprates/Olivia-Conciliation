@@ -7,12 +7,18 @@ import (
 	"os"
 	"strings"
 
+	"github.com/joho/godotenv"
 	"olivia-conciliation/backend/handlers"
 	"olivia-conciliation/backend/service"
 	"olivia-conciliation/backend/sheets"
 )
 
 func main() {
+	// Load .env if present, without failing when missing.
+	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
+		log.Printf("warning: failed to load .env: %v", err)
+	}
+
 	// Env vars checks
 	spreadsheetID := os.Getenv("SPREADSHEET_ID")
 	if spreadsheetID == "" {

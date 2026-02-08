@@ -37,13 +37,9 @@ Se preferir, você também pode exportar as variáveis manualmente no terminal.
 
 ### Backend
 
-Execute o servidor Go na porta 8080 (carregando as variáveis do `.env`):
+Execute o servidor Go na porta 8080 (o backend carrega `.env` automaticamente):
 
 ```bash
-set -a
-source .env
-set +a
-
 go run backend/main.go
 ```
 
