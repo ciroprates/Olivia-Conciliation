@@ -1,0 +1,9 @@
+# Secrets
+.env
+*service-account*.json
+
+# Logs
+*.log
+
+# OS / editor
+.DS_Store

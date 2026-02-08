@@ -1,0 +1,240 @@
+Crie uma aplicação composta por:
+Backend em Golang (API REST) responsável por:
+
+
+Ler/escrever dados em um Google Sheet via Google Sheets API
+
+
+Executar a lógica de pareamento entre as abas Diferença (DIF) e Entradas e Saídas (ES)
+
+
+Expor endpoints REST para listagem de pendências, detalhamento, aceitação e rejeição
+
+
+Frontend SPA (Single Page Application) responsável por:
+
+
+Consumir a API REST
+
+
+Exibir a fila de conciliações pendentes
+
+
+Permitir selecionar candidatas e aplicar ações
+
+
+
+Requisitos e Estrutura da Planilha
+A API deve interagir com as abas:
+Entradas e Saídas (ES): transações futuras sem ID
+
+
+Filtro: Recorrente? = "Sim" e Id da parcela vazio
+
+
+Diferença (DIF): transações futuras com ID
+
+
+Rejeitados (REJ): destino das transações rejeitadas (oriundas da DIF)
+
+
+Estrutura de colunas (use constantes no Go)
+Campo
+Índice (A=1)
+Constante Go
+Dono
+1
+ColumnDono
+Banco
+2
+ColumnBanco
+Conta
+3
+ColumnConta
+Descrição
+4
+ColumnDescricao
+Recorrente?
+5
+ColumnRecorrente
+Data
+6
+ColumnData
+Valor
+7
+ColumnValor
+Id da parcela
+8
+ColumnIdParcela
+
+
+Lógica de Pareamento (Backend)
+Para cada transação em DIF, buscar candidatas em ES que satisfaçam:
+Correspondência exata (obrigatória)
+
+
+DIF.Dono == ES.Dono
+
+
+DIF.Banco == ES.Banco
+
+
+DIF.Conta == ES.Conta
+
+
+Correspondência flexível (obrigatória)
+
+
+Valor: diferença absoluta menor que 5,00
+
+
+A API deve retornar ao frontend:
+A transação de referência (DIF)
+
+
+A lista de candidatas (ES)
+
+
+Metadados suficientes para o frontend executar ações (ex.: índices das linhas)
+
+
+
+Contrato REST da API (Golang)
+1) Listar pendências de conciliação
+GET /api/conciliations
+Retorna uma lista de itens com:
+difRowIndex
+
+
+idParcela
+
+
+campos principais (dono, banco, conta, data, valor, descricao)
+
+
+contagem de candidatas encontradas
+
+
+2) Detalhar uma conciliação (referência + candidatas)
+GET /api/conciliations/{difRowIndex}
+Retorna:
+reference (registro DIF)
+
+
+candidates[] (registros ES filtrados)
+
+
+cada candidata deve conter esRowIndex e campos exibíveis
+
+
+3) Aceitar conciliação (escrever ID em uma ou mais linhas ES)
+POST /api/conciliations/{difRowIndex}/accept
+Body JSON:
+{
+  "esRowIndices": [12, 13, 14]
+}
+
+
+Comportamento:
+Obtém idParcela a partir da linha DIF
+
+
+Escreve idParcela no campo Id da parcela das linhas ES selecionadas
+
+
+Retorna status e, opcionalmente, os registros atualizados
+
+
+4) Rejeitar transação de referência (mover DIF → REJ)
+POST /api/conciliations/{difRowIndex}/reject
+Comportamento:
+Move a linha completa da DIF para REJ
+
+
+Remove a linha original da DIF
+
+
+Regra: somente a referência (DIF) pode ser rejeitada
+
+
+
+SPA (Frontend)
+A SPA (HTML/CSS/JS puro ou framework leve como React/Vue/Svelte) deve conter:
+Tela 1 — “Fila de Conciliações”
+Lista de referências DIF pendentes
+
+
+Busca/filtro por dono/banco/conta/valor
+
+
+Ação: abrir detalhes
+
+
+Tela 2 — “Detalhe da Conciliação”
+Bloco “Referência (DIF)” com ID e dados relevantes
+
+
+Lista de “Candidatas (ES)” com seleção múltipla (checkbox)
+
+
+Botões:
+
+
+Aceitar (envia esRowIndices)
+
+
+Rejeitar (rejeita a referência DIF)
+
+
+Feedback de sucesso/erro
+
+
+
+Requisitos Técnicos
+Go com estrutura em camadas (exemplo):
+
+
+handlers (HTTP)
+
+
+service (regra de conciliação)
+
+
+sheets (cliente Google Sheets API)
+
+
+models
+
+
+Autenticação Google Sheets via Service Account ou OAuth2
+
+
+CORS habilitado para a SPA
+
+
+Configuração via env vars:
+
+
+GOOGLE_APPLICATION_CREDENTIALS
+
+
+SPREADSHEET_ID
+
+
+nomes das abas (ES/DIF/REJ)
+
+
+
+Instrução Final
+Forneça:
+Código completo do backend Go (com rotas REST e cliente Google Sheets API)
+
+
+Código completo do frontend SPA (rotas/telas, chamadas fetch/axios e UI)
+
+
+Exemplos de respostas JSON para cada endpoint
+
+
+Passo a passo de configuração (credenciais, permissões, execução local)
+

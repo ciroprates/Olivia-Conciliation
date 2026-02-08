@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conciliação de Parcelas</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="background-blob"></div>
+    <div class="background-blob blob-2"></div>
+
+    <div class="app-container glass">
+        <header>
+            <h1>Conciliação de Parcelas</h1>
+            <p class="subtitle">Gerencie suas pendências de forma simples e rápida.</p>
+        </header>
+
+        <main id="main-content">
+            <!-- Views will be injected here -->
+        </main>
+    </div>
+
+    <!-- Templates -->
+    <template id="view-queue">
+        <div class="queue-view">
+            <div class="filters">
+                <input type="text" id="search" placeholder="Buscar por Dono, Banco ou Valor..." class="glass-input">
+                <div class="stats">
+                    <span id="pending-count">0 pendentes</span>
+                </div>
+            </div>
+            <div class="card-list" id="conciliation-list">
+                <!-- Items -->
+            </div>
+        </div>
+    </template>
+
+    <template id="view-details">
+        <div class="details-view">
+            <button class="btn-back" onclick="app.navigate('queue')">← Voltar</button>
+
+            <div class="split-view">
+                <div class="reference-card glass-panel">
+                    <h2>Referência (DIF)</h2>
+                    <div id="ref-details"></div>
+                    <div class="actions">
+                        <button class="btn-reject" onclick="app.rejectCurrent()">Rejeitar Referência</button>
+                    </div>
+                </div>
+
+                <div class="candidates-card glass-panel">
+                    <h2>Candidatas (ES)</h2>
+                    <div class="candidates-list" id="candidates-list"></div>
+                    <div class="actions">
+                        <button class="btn-accept" onclick="app.acceptSelection()">Aceitar Seleção</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
