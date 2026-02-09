@@ -59,6 +59,15 @@ func parseBool(v interface{}) bool {
 	return s == "sim" || s == "yes" || s == "true"
 }
 
+func isPendingES(t models.Transaction) bool {
+	idParcela := strings.ToLower(strings.TrimSpace(t.IdParcela))
+	if strings.HasPrefix(idParcela, "synthetic") {
+		return true
+	}
+	// Default: recurring and without installment ID.
+	return t.Recorrente && idParcela == ""
+}
+
 func rowToTransaction(idx int, row []interface{}, sheetName string) models.Transaction {
 	t := models.Transaction{RowIndex: idx, Sheet: sheetName}
 	if len(row) > models.ColumnDono {
@@ -111,8 +120,8 @@ func (l *Logic) GetConciliations() ([]models.PendingConciliationSummary, error) 
 	var candidates []models.Transaction
 	for i := 1; i < len(esRows); i++ {
 		t := rowToTransaction(i, esRows[i], "ES")
-		// Filter: Recorrente? = "Sim" e Id da parcela vazio
-		if t.Recorrente && t.IdParcela == "" {
+		// Filter: recurring without installment ID OR synthetic prefix
+		if isPendingES(t) {
 			candidates = append(candidates, t)
 		}
 	}
@@ -125,6 +134,10 @@ func (l *Logic) GetConciliations() ([]models.PendingConciliationSummary, error) 
 		if dif.Dono == "" && dif.Valor == 0 {
 			continue
 		} // Skip empty
+		// Only conciliate recurring transactions from DIF.
+		if !dif.Recorrente {
+			continue
+		}
 
 		count := 0
 		// Match logic
@@ -184,6 +197,9 @@ func (l *Logic) GetConciliationDetails(difIndex int) (*models.ConciliationCandid
 	}
 
 	dif := rowToTransaction(difIndex, difRows[difIndex], "DIF")
+	if !dif.Recorrente {
+		return nil, errors.New("DIF transaction is not recurring")
+	}
 
 	// 2. Fetch ES
 	esRows, err := l.client.FetchRows(os.Getenv("SHEET_ES"))
@@ -194,7 +210,7 @@ func (l *Logic) GetConciliationDetails(difIndex int) (*models.ConciliationCandid
 	var matchCandidates []models.Transaction
 	for i := 1; i < len(esRows); i++ {
 		t := rowToTransaction(i, esRows[i], "ES")
-		if t.Recorrente && t.IdParcela == "" {
+		if isPendingES(t) {
 			if isMatch(dif, t) {
 				matchCandidates = append(matchCandidates, t)
 			}
