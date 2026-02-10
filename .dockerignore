@@ -1,0 +1,8 @@
+.git
+.gitignore
+backend.log
+olivia-backend
+.env
+olivia-service-account-key.json
+frontend
+**/*.md
