@@ -1,9 +1,7 @@
 services:
+  # --- Serviços Olivia ---
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    user: "0:0"
+    image: 683684736241.dkr.ecr.us-east-1.amazonaws.com/olivia-conciliation:backend-latest
     ports:
       - "8080:8080"
     env_file:
@@ -11,13 +9,63 @@ services:
     environment:
       GOOGLE_APPLICATION_CREDENTIALS: /secrets/olivia-service-account-key.json
     volumes:
-      - ./olivia-service-account-key.json:/secrets/olivia-service-account-key.json:ro
+      - ${GOOGLE_APPLICATION_CREDENTIALS}:/secrets/olivia-service-account-key.json:ro
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: 683684736241.dkr.ecr.us-east-1.amazonaws.com/olivia-conciliation:frontend-latest
     ports:
-      - "3000:80"
+      - "3001:80" # Alterado de 3000 para 3001 para evitar conflito com o waha
     depends_on:
       - backend
+
+  # --- Serviços n8n & Automação ---
+  n8n:
+    image: n8nio/n8n
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      WEBHOOK_URL: https://n8n.olivinha.site
+      N8N_HOST: host.docker.internal
+      GENERIC_TIMEZONE: America/Sao_Paulo
+      N8N_LOG_LEVEL: debug
+      N8N_COMMUNITY_PACKAGES_ALLOW_TOOL_USAGE: "true"
+      N8N_RUNNERS_ENABLED: "true"
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+  waha:
+    image: devlikeapro/waha:latest
+    restart: always
+    platform: linux/amd64
+    ports:
+      - "3000:3000"
+    environment:
+      WHATSAPP_HOOK_URL: https://n8n.olivinha.site/webhook/webhook
+      WHATSAPP_DEFAULT_ENGINE: GOWS
+      WHATSAPP_HOOK_EVENTS: message
+    volumes:
+      - waha_sessions:/app/.sessions
+      - waha_media:/app/.media
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+volumes:
+  n8n_data:
+  waha_sessions:
+  waha_media:
