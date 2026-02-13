@@ -87,9 +87,10 @@ jobs:
             EOF
 
             # 3. Login no ECR e atualização dos containers
-            aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
-            docker compose pull
-            docker compose up -d
+            # Tenta login no ECR, mas continua mesmo se falhar (imagens públicas não precisam)
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }} || true
+            sudo docker compose pull
+            sudo docker compose up -d
             
             # 4. Limpeza de imagens antigas
-            docker image prune -f
+            sudo docker image prune -f
