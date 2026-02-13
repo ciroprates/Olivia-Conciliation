@@ -50,13 +50,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Rename docker-compose for atomic upload
+        run: mv docker-compose.yml docker-compose.new
+
       - name: Copy docker-compose via SCP
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ env.EC2_HOST }}
           username: ${{ env.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "docker-compose.yml"
+          source: "docker-compose.new"
           target: ${{ env.APP_DIR }}
 
       - name: Deploy to EC2 via SSH
@@ -67,6 +70,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd ${{ env.APP_DIR }}
+            mv docker-compose.new docker-compose.yml
             
             # 1. Gera o key.json a partir do Secret (Base64)
             echo "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" | base64 -d > key.json

@@ -48,7 +48,7 @@ services:
     restart: always
     platform: linux/amd64
     ports:
-      - "3000:3000"
+      - "3002:3000"
     environment:
       WHATSAPP_HOOK_URL: https://n8n.olivinha.site/webhook/webhook
       WHATSAPP_DEFAULT_ENGINE: GOWS
