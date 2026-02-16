@@ -36,6 +36,7 @@ jobs:
         with:
           context: .
           push: true
+          no-cache: true
           tags: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:backend-latest
 
       - name: Build and push frontend
@@ -43,6 +44,7 @@ jobs:
         with:
           context: ./frontend
           push: true
+          no-cache: true
           tags: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:frontend-latest
 
   deploy-ec2:
