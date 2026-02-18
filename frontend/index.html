@@ -15,8 +15,22 @@
 
     <div class="app-container glass">
         <header>
-            <h1>Conciliação de Parcelas</h1>
-            <p class="subtitle">Gerencie suas pendências de forma bonitinha!</p>
+            <div class="header-content">
+                <div>
+                    <h1>Conciliação de Parcelas</h1>
+                    <p class="subtitle">Gerencie suas pendências de forma bonitinha!</p>
+                </div>
+                <div class="header-actions">
+                    <button id="btn-process" class="btn-process" onclick="app.startTransactionProcessing()">
+                        <span class="icon">⚡</span>
+                        Processar Transações
+                    </button>
+                    <div id="status-indicator" class="status-indicator hidden" onclick="app.openStatusModal()">
+                        <span class="pulse"></span>
+                        <span id="status-text">Processando...</span>
+                    </div>
+                </div>
+            </div>
         </header>
 
         <main id="main-content">
@@ -57,6 +71,51 @@
                     <div class="candidates-list" id="candidates-list"></div>
                     <div class="actions">
                         <button class="btn-accept" onclick="app.acceptSelection()">Aceitar Seleção</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Modal de Status -->
+    <div id="status-modal-container"></div>
+    <template id="modal-execution-status">
+        <div class="modal-overlay">
+            <div class="modal-content glass">
+                <div class="modal-header">
+                    <h2>Status da Execução</h2>
+                    <button class="btn-close" onclick="app.closeStatusModal()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="execution-info">
+                        <div class="status-badge" id="execution-status">RUNNING</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-fill"></div>
+                            <span class="progress-text" id="progress-text">0%</span>
+                        </div>
+                        <div class="current-step" id="current-step">FETCHING_TRANSACTIONS</div>
+                    </div>
+
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <span class="metric-label">Transações Buscadas</span>
+                            <span class="metric-value" id="metric-transactions">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">Parcelas Criadas</span>
+                            <span class="metric-value" id="metric-installments">-</span>
+                        </div>
+                        <div class="metric-card">
+                            <span class="metric-label">Duplicatas Removidas</span>
+                            <span class="metric-value" id="metric-duplicates">-</span>
+                        </div>
+                    </div>
+
+                    <div class="execution-history">
+                        <h3>Histórico de Execuções</h3>
+                        <div id="history-list" class="history-list">
+                            <!-- Items will be injected here -->
+                        </div>
                     </div>
                 </div>
             </div>

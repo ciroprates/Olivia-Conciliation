@@ -5,12 +5,12 @@ on:
     branches: [ main ]
 
 env:
-  AWS_REGION: us-east-1
-  ECR_REGISTRY: 683684736241.dkr.ecr.us-east-1.amazonaws.com
-  ECR_REPOSITORY: olivia-conciliation
-  EC2_HOST: 100.27.130.161
-  EC2_USER: ubuntu
-  APP_DIR: /var/app
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  EC2_HOST: ${{ vars.EC2_HOST }}
+  EC2_USER: ${{ vars.EC2_USER }}
+  APP_DIR: ${{ vars.APP_DIR }}
 
 jobs:
   build-and-push:
@@ -57,13 +57,13 @@ jobs:
       - name: Rename docker-compose for atomic upload
         run: mv docker-compose.yml docker-compose.new
 
-      - name: Copy docker-compose via SCP
+      - name: Copy docker-compose and scripts via SCP
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ env.EC2_HOST }}
           username: ${{ env.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "docker-compose.new"
+          source: "docker-compose.new,scripts/deploy-ec2.sh"
           target: ${{ env.APP_DIR }}
 
       - name: Deploy to EC2 via SSH
@@ -72,29 +72,11 @@ jobs:
           host: ${{ env.EC2_HOST }}
           username: ${{ env.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          envs: APP_DIR,AWS_REGION,ECR_REGISTRY,ECR_REPOSITORY,GCP_SERVICE_ACCOUNT_KEY,SPREADSHEET_ID
+          script_stop: true
           script: |
-            cd ${{ env.APP_DIR }}
-            mv docker-compose.new docker-compose.yml
-            
-            # 1. Gera o key.json a partir do Secret (Base64)
-            echo "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" | base64 -d > key.json
-            chmod 600 key.json
-
-            # 2. Cria o arquivo .env usando os Secrets do GitHub
-            cat > .env <<EOF
-            GOOGLE_APPLICATION_CREDENTIALS=/var/app/key.json
-            SPREADSHEET_ID=${{ secrets.SPREADSHEET_ID }}
-            PORT=8080
-            SHEET_ES=Entradas e Saídas
-            SHEET_DIF=Diferença
-            SHEET_REJ=Rejeitados
-            EOF
-
-            # 3. Login no ECR e atualização dos containers
-            # Tenta login no ECR, mas continua mesmo se falhar (imagens públicas não precisam)
-            aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }} || true
-            sudo docker compose pull
-            sudo docker compose up -d
-            
-            # 4. Limpeza de imagens antigas
-            sudo docker image prune -f
+            chmod +x ${{ env.APP_DIR }}/scripts/deploy-ec2.sh
+            ${{ env.APP_DIR }}/scripts/deploy-ec2.sh
+        env:
+          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}

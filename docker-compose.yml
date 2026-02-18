@@ -1,7 +1,8 @@
 services:
   # --- Serviços Olivia ---
   backend:
-    image: 683684736241.dkr.ecr.us-east-1.amazonaws.com/olivia-conciliation:backend-latest
+    build: .
+    image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:backend-latest
     ports:
       - "8080:8080"
     env_file:
@@ -12,11 +13,19 @@ services:
       - ${GOOGLE_APPLICATION_CREDENTIALS}:/secrets/olivia-service-account-key.json:ro
 
   frontend:
-    image: 683684736241.dkr.ecr.us-east-1.amazonaws.com/olivia-conciliation:frontend-latest
+    build: ./frontend
+    image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:frontend-latest
     ports:
       - "3001:80" # Alterado de 3000 para 3001 para evitar conflito com o waha
     depends_on:
       - backend
+
+  olivia-api:
+    image: ${ECR_REGISTRY}/olivia-api:latest
+    ports:
+      - "3003:3000"
+    env_file:
+      - .env
 
   # --- Serviços n8n & Automação ---
   n8n:
