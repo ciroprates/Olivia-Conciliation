@@ -101,7 +101,12 @@ O projeto utiliza **GitHub Actions** com **AWS Systems Manager (SSM)** para depl
 | Tipo | Chaves |
 | :--- | :--- |
 | **Secrets** | `GCP_SERVICE_ACCOUNT_KEY`, `SPREADSHEET_ID`, `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `ADMIN_USER`, `ADMIN_PASS`, `JWT_SECRET` |
-| **Variables** | `AWS_REGION`, `ECR_REGISTRY`, `ECR_REPOSITORY`, `APP_DIR`, `DEPLOY_TAG_KEY`, `DEPLOY_TAG_VALUE` |
+| **Variables** | `AWS_REGION`, `ECR_REGISTRY`, `ECR_REPOSITORY`, `AWS_ROLE_BUILD_ARN`, `AWS_ROLE_DEPLOY_ARN`, `APP_DIR`, `DEPLOY_TAG_KEY`, `DEPLOY_TAG_VALUE` |
+
+### 👤 Roles IAM (OIDC) Esperadas
+
+1. `AWS_ROLE_BUILD_ARN`: role usada no job de build/push para autenticar no ECR.
+2. `AWS_ROLE_DEPLOY_ARN`: role usada no job de deploy para executar `ec2:DescribeInstances` e comandos via SSM.
 
 ---
 

@@ -12,6 +12,8 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  AWS_ROLE_BUILD_ARN: ${{ vars.AWS_ROLE_BUILD_ARN }}
+  AWS_ROLE_DEPLOY_ARN: ${{ vars.AWS_ROLE_DEPLOY_ARN }}
   EC2_HOST: ${{ vars.EC2_HOST }}
   EC2_USER: ${{ vars.EC2_USER }}
   APP_DIR: ${{ vars.APP_DIR }}
@@ -26,7 +28,8 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::683684736241:role/GitHubActionsOliviaConciliationRole
+          role-to-assume: ${{ env.AWS_ROLE_BUILD_ARN }}
+          role-session-name: github-actions-ecr-build
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to ECR
@@ -58,7 +61,8 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::683684736241:role/GitHubActionsOliviaConciliationRole
+          role-to-assume: ${{ env.AWS_ROLE_DEPLOY_ARN }}
+          role-session-name: github-actions-ssm-deploy
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Deploy to EC2 via SSM
