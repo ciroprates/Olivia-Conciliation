@@ -51,8 +51,6 @@ jobs:
   deploy-ec2:
     runs-on: ubuntu-latest
     needs: build-and-push
-    env:
-      EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -71,10 +69,24 @@ jobs:
           NGINX_CONF_B64=$(base64 -w 0 nginx/nginx.conf)
           SETUP_SSL_B64=$(base64 -w 0 scripts/setup-ssl.sh)
 
-          echo "Iniciando deploy via SSM na instância ${{ env.EC2_INSTANCE_ID }}..."
+          # Busca o InstanceId dinamicamente pela tag (usando variáveis com fallback)
+          TAG_KEY="${{ vars.DEPLOY_TAG_KEY || 'Project' }}"
+          TAG_VALUE="${{ vars.DEPLOY_TAG_VALUE || 'Olivia' }}"
+
+          INSTANCE_ID=$(aws ec2 describe-instances \
+            --filters "Name=tag:$TAG_KEY,Values=$TAG_VALUE" "Name=instance-state-name,Values=running" \
+            --query "Reservations[0].Instances[0].InstanceId" \
+            --output text)
+
+          if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" == "None" ]; then
+            echo "Erro: Nenhuma instância rodando encontrada com a tag Project=Olivia"
+            exit 1
+          fi
+
+          echo "Iniciando deploy via SSM na instância $INSTANCE_ID..."
 
           COMMAND_ID=$(aws ssm send-command \
-            --instance-ids "${{ env.EC2_INSTANCE_ID }}" \
+            --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy Olivia Conciliation" \
             --parameters 'commands=[
@@ -105,12 +117,12 @@ jobs:
 
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \
-            --instance-id "${{ env.EC2_INSTANCE_ID }}"
+            --instance-id "$INSTANCE_ID"
 
           # Verifica se o comando teve sucesso
           STATUS=$(aws ssm list-command-invocations \
             --command-id "$COMMAND_ID" \
-            --instance-id "${{ env.EC2_INSTANCE_ID }}" \
+            --instance-id "$INSTANCE_ID" \
             --query "CommandInvocations[0].Status" \
             --output text)
 
@@ -118,7 +130,7 @@ jobs:
             echo "Erro no deploy! Status: $STATUS"
             aws ssm list-command-invocations \
               --command-id "$COMMAND_ID" \
-              --instance-id "${{ env.EC2_INSTANCE_ID }}" \
+              --instance-id "$INSTANCE_ID" \
               --details \
               --query "CommandInvocations[0].CommandPlugins[0].Output" \
               --output text

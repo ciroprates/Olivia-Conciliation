@@ -101,7 +101,7 @@ O projeto utiliza **GitHub Actions** com **AWS Systems Manager (SSM)** para depl
 | Tipo | Chaves |
 | :--- | :--- |
 | **Secrets** | `GCP_SERVICE_ACCOUNT_KEY`, `SPREADSHEET_ID`, `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `ADMIN_USER`, `ADMIN_PASS`, `JWT_SECRET` |
-| **Variables** | `AWS_REGION`, `ECR_REGISTRY`, `ECR_REPOSITORY`, `EC2_INSTANCE_ID`, `APP_DIR` |
+| **Variables** | `AWS_REGION`, `ECR_REGISTRY`, `ECR_REPOSITORY`, `APP_DIR`, `DEPLOY_TAG_KEY`, `DEPLOY_TAG_VALUE` |
 
 ---
 
