@@ -39,6 +39,9 @@ PORT=8080
 SHEET_ES=Entradas e Saídas
 SHEET_DIF=Diferença
 SHEET_REJ=Rejeitados
+ADMIN_USER=$ADMIN_USER
+ADMIN_PASS=$ADMIN_PASS
+JWT_SECRET=$JWT_SECRET
 EOF
 
 # 4. Login no ECR
@@ -52,7 +55,12 @@ echo "Puxando novas imagens e reiniciando containers..."
 sudo docker compose pull
 sudo docker compose up -d
 
-# 6. Limpeza
+# 6. Renovação de SSL (se necessário)
+echo "Verificando renovação de certificados SSL..."
+sudo docker compose run --rm certbot renew
+sudo docker compose restart nginx
+
+# 7. Limpeza
 echo "Limpando imagens antigas..."
 sudo docker image prune -f
 

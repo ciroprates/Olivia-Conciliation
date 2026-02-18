@@ -7,10 +7,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/joho/godotenv"
 	"olivia-conciliation/backend/handlers"
 	"olivia-conciliation/backend/service"
 	"olivia-conciliation/backend/sheets"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -53,19 +54,15 @@ func main() {
 		})
 	}
 
-	// Routes
-	// Exact match first, then prefix
-	mux.HandleFunc("GET /api/conciliations", h.GetConciliations)
-	mux.HandleFunc("GET /api/conciliations/", h.GetConciliationDetails) // This matches /api/conciliations/{id} and potentially subpaths if not careful.
-	// Since we use Split strings logic in handler, it's okay for now.
-	// But "POST /api/conciliations/{id}/accept" needs careful routing.
-	// Go 1.22 has better routing, but assuming older Go or standard mux limitations.
-	// Let's use standard prefix mathcing + method checks or simple manual routing if using old mux.
-	// If using Go 1.22+ we can use "POST /api/conciliations/{id}/accept".
-	// I'll stick to manual dispatching in a shared path or distinct paths if simpler.
+	// Public Routes
+	mux.HandleFunc("POST /api/login", h.Login)
 
-	// Using simple prefix matching for clarity with standard lib
-	mux.HandleFunc("/api/conciliations/", func(w http.ResponseWriter, r *http.Request) {
+	// Protected Routes
+	protectedMux := http.NewServeMux()
+	protectedMux.HandleFunc("GET /api/auth/verify", h.Verify)
+	protectedMux.HandleFunc("GET /api/conciliations", h.GetConciliations)
+
+	protectedMux.HandleFunc("/api/conciliations/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "OPTIONS" {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -73,7 +70,6 @@ func main() {
 			return
 		}
 
-		// /api/conciliations/{id} vs /api/conciliations/{id}/accept
 		path := r.URL.Path
 		if strings.HasSuffix(path, "/accept") && r.Method == "POST" {
 			h.AcceptConciliation(w, r)
@@ -84,21 +80,14 @@ func main() {
 			return
 		}
 		if r.Method == "GET" {
-			// Check if it's the list or detail
-			// List is strictly /api/conciliations but this handler is registered for trailing slash?
-			// Actually I registered "GET /api/conciliations" separately.
-			// This handler catches /api/conciliations/...
 			h.GetConciliationDetails(w, r)
 			return
 		}
 		http.NotFound(w, r)
 	})
 
-	// Fix: Re-register list exact match if needed or ensure the prefix doesn't swallow it.
-	// Mux specific: "/foo/" matches "/foo/bar", "/foo" matches "/foo".
-	// I routed "GET /api/conciliations" above. I will change to standard handler func without method prefix (Go 1.22 feature) to be safe for older Go versions possibly on user machine?
-	// User has generic "linux", likely Go 1.21+. Let's assume standard mux.
-	// To be safe: register "/api/conciliations" and "/api/conciliations/"
+	// Mount protected routes with AuthMiddleware
+	mux.Handle("/api/", h.AuthMiddleware(protectedMux))
 
 	finalHandler := corsMiddleware(mux)
 

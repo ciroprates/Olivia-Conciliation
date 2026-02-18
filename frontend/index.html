@@ -29,6 +29,7 @@
                         <span class="pulse"></span>
                         <span id="status-text">Processando...</span>
                     </div>
+                    <button id="btn-logout" class="btn-logout hidden" onclick="app.logout()">Sair</button>
                 </div>
             </div>
         </header>
@@ -39,6 +40,24 @@
     </div>
 
     <!-- Templates -->
+    <template id="view-login">
+        <div class="login-view glass">
+            <div class="login-form">
+                <h2>Login</h2>
+                <p>Acesse o painel administrativo</p>
+                <div class="input-group">
+                    <label>Usuário</label>
+                    <input type="text" id="login-user" placeholder="Digite seu usuário" class="glass-input">
+                </div>
+                <div class="input-group">
+                    <label>Senha</label>
+                    <input type="password" id="login-pass" placeholder="Digite sua senha" class="glass-input">
+                </div>
+                <button class="btn-login" onclick="app.login()">Entrar</button>
+            </div>
+        </div>
+    </template>
+
     <template id="view-queue">
         <div class="queue-view">
             <div class="filters">

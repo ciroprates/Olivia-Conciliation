@@ -1,119 +1,116 @@
-# Olivia Installments Conciliation
+# 🏦 Olivia Installments Conciliation
 
-Aplicação para conciliação de parcelas financeiras usando Google Sheets. Composta por um backend em Go e um frontend SPA.
+[![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)](https://golang.org/)
+[![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED?style=flat&logo=docker)](https://www.docker.com/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
----
-
-## 📌 Sumário
-- [Requisitos](#requisitos)
-- [Estrutura da Planilha](#estrutura-da-planilha)
-- [Configuração Local](#configuração-local)
-- [Como Executar](#como-executar)
-  - [Docker (Recomendado)](#docker-recomendado)
-  - [Sem Docker](#sem-docker)
-- [Pipeline de CI/CD](#pipeline-de-cicd)
-  - [Configuração GitHub Actions](#configuração-github-actions)
-- [Funcionalidades](#funcionalidades)
+Sistema inteligente de conciliação financeira automatizada entre **Google Sheets** e **Pluggy API**. Gerencie transações, identifique parcelas e automatize fluxos de auditoria com segurança e alta performance.
 
 ---
 
-## ## Requisitos
+A aplicação utiliza uma arquitetura de microservices orquestrada por Docker, protegida por um Proxy Reverso Nginx com suporte a HTTPS (Let's Encrypt) e uma camada de autenticação **JWT (JSON Web Tokens)**.
 
-- **Go 1.21+**
-- **Google Cloud Service Account** com a API do Sheets habilitada.
-- Arquivo de Service Account (JSON) na raiz do projeto.
-- ID de uma Planilha Google válida.
-
-## ## Estrutura da Planilha
-
-A aplicação espera as seguintes abas na planilha:
-1. **Entradas e Saídas (ES)**: Transações bancárias sem identificação.
-2. **Diferença (DIF)**: Transações de referência com IDs únicos.
-3. **Rejeitados (REJ)**: Destino para transações marcadas como inválidas ou rejeitadas.
-
----
-
-## ## Configuração Local
-
-1. **Variáveis de Ambiente**:
-   Copie o arquivo de exemplo e preencha com seus dados reais:
-   ```bash
-   cp .env.example .env
-   ```
-
-2. **Credenciais Google**:
-   Coloque o arquivo JSON da sua Service Account na raiz do projeto conforme configurado na chave `GOOGLE_APPLICATION_CREDENTIALS` do seu `.env`.
-
----
-
-## ## Como Executar
-
-### ### Docker (Recomendado)
-
-A forma mais rápida de subir o ambiente completo (incluindo serviços auxiliares):
-
-1. **Autentique no ECR** (opcional, se estiver usando imagens remotas):
-   ```bash
-   aws ecr get-login-password --region us-east-1 | sudo docker login --username AWS --password-stdin 683684736241.dkr.ecr.us-east-1.amazonaws.com
-   ```
-
-2. **Suba os containers**:
-   ```bash
-   docker compose up -d
-   ```
-
-*   **Frontend**: [http://localhost:3001](http://localhost:3001)
-*   **Backend**: [http://localhost:8080](http://localhost:8080)
-
-> [!NOTE]
-> O projeto inclui **n8n** e **waha** para automações. Para subir apenas o core: `docker compose up -d backend frontend`.
-
-### ### Sem Docker
-
-#### #### Backend
-```bash
-# O backend carrega o .env automaticamente
-go run backend/main.go
-```
-
-#### #### Frontend
-```bash
-cd frontend
-python3 -m http.server 3000
-# Acesse http://localhost:3000
+```mermaid
+graph TD
+    User((Usuário)) ---->|https| Nginx{Nginx Proxy}
+    Nginx ---->|port 80| Frontend[Frontend SPA]
+    Nginx ---->|port 8080| Backend[Go Backend]
+    Nginx ---->|port 3000| OliviaAPI[Olivia API]
+    Nginx ---->|port 5678| n8n[n8n Automation]
+    Nginx ---->|port 3000| WAHA[WhatsApp API]
+    
+    Backend ---->|Read/Write| Sheets((Google Sheets))
+    OliviaAPI ---->|Sync| Pluggy((Pluggy API))
 ```
 
 ---
 
-## ## Pipeline de CI/CD
+## 🚀 Como Executar
 
-O projeto utiliza **GitHub Actions** para automação total do build e deploy no EC2.
+### 🐳 Via Docker (Recomendado)
 
-### ### Configuração GitHub Actions
+O ambiente completo sobe com um único comando, incluindo os certificados SSL e automações.
 
-Para o funcionamento do pipeline [ecr-push.yml](.github/workflows/ecr-push.yml), configure as seguintes chaves no GitHub:
+1.  **Configuração Inicial**:
+    ```bash
+    cp .env.example .env
+    # Preencha as credenciais no arquivo .env
+    ```
 
-#### #### 🔐 Secrets
-| Chave | Descrição |
+2.  **Deploy**:
+    ```bash
+    docker compose up -d
+    ```
+
+3.  **Ativação SSL (Apenas EC2)**:
+    ```bash
+    chmod +x scripts/setup-ssl.sh
+    ./scripts/setup-ssl.sh
+    ```
+
+### 💻 Desenvolvimento Local (Sem Docker)
+
+Para testar mudanças rapidamente sem subir toda a infraestrutura:
+
+1.  **Backend (Go)**:
+    ```bash
+    go run backend/main.go
+    # O backend subirá em http://localhost:8080
+    ```
+
+2.  **Frontend (Vanilla JS)**:
+    ```bash
+    cd frontend
+    python3 -m http.server 3001
+    # Acesse http://localhost:3001
+    ```
+
+> [!WARNING]
+> Ao rodar localmente sem o Nginx, você precisará alterar as constantes `API_URL` e `EXECUTION_API_URL` no arquivo `frontend/app.js` para apontarem para `localhost` em vez dos subdomínios `.site`.
+
+### 🛠️ Simulando Produção Localmente (Com Docker)
+
+Para testar o roteamento do Nginx no seu computador:
+1.  Edite seu arquivo de hosts (`/etc/hosts` no Linux ou `C:\Windows\System32\drivers\etc\hosts` no Windows).
+2.  Adicione o mapeamento:
+    ```text
+    127.0.0.1 console.olivinha.site bff.olivinha.site api.olivinha.site n8n.olivinha.site waha.olivinha.site
+    ```
+3.  Suba os containers: `docker compose up -d`.
+
+### 🌍 URLs de Acesso
+
+| Serviço | URL |
 | :--- | :--- |
-| `EC2_SSH_KEY` | Chave privada SSH para acesso ao servidor. |
-| `GCP_SERVICE_ACCOUNT_KEY` | JSON da Service Account do Google em **Base64**. |
-| `SPREADSHEET_ID` | ID da planilha que será conciliada. |
-| `PLUGGY_CLIENT_ID` | Client ID para integração Pluggy. |
-| `PLUGGY_CLIENT_SECRET` | Client Secret para integração Pluggy. |
+| **Aplicação Principal** | [https://console.olivinha.site](https://console.olivinha.site) |
+| **Integração Backend** | [https://bff.olivinha.site](https://bff.olivinha.site) |
+| **Automação n8n** | [https://n8n.olivinha.site](https://n8n.olivinha.site) |
+| **WhatsApp API** | [https://waha.olivinha.site](https://waha.olivinha.site) |
 
-#### #### ⚙️ Variables
-| Nome | Exemplo / Valor |
+---
+
+## 🛠️ Configuração de CI/CD
+
+O projeto utiliza **GitHub Actions** com **AWS Systems Manager (SSM)** para deploys automáticos e seguros, sem necessidade de chaves SSH expostas.
+
+### 🔐 Secrets & Variables Necessárias
+
+> [!IMPORTANT]
+> Configure estas variáveis nas configurações do repositório GitHub para o pipeline `ecr-push.yml`.
+
+| Tipo | Chaves |
 | :--- | :--- |
-| `AWS_REGION` | `us-east-1` |
-| `ECR_REGISTRY` | `123456789.dkr.ecr.us-east-1.amazonaws.com` |
-| `ECR_REPOSITORY` | `olivia-conciliation` |
-| `EC2_HOST` | IP Elástico do servidor EC2. |
-| `EC2_USER` | `ubuntu` |
-| `APP_DIR` | `/var/app` |
+| **Secrets** | `GCP_SERVICE_ACCOUNT_KEY`, `SPREADSHEET_ID`, `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `ADMIN_USER`, `ADMIN_PASS`, `JWT_SECRET` |
+| **Variables** | `AWS_REGION`, `ECR_REGISTRY`, `ECR_REPOSITORY`, `EC2_INSTANCE_ID`, `APP_DIR` |
 
-> [!TIP]
-> O uso de **Variables** permite trocar de servidor ou região AWS sem precisar alterar uma linha de código, mantendo o processo dinâmico e seguro.
+---
+
+## 🛡️ Segurança
+
+*   **Proxy Reverso**: Todos os serviços rodam em rede interna Docker, acessíveis apenas via Nginx.
+*   **Autenticação JWT**: Controle de acesso unificado para o Console e APIs, validado na borda pelo Nginx (`auth_request`).
+*   **SSL/TLS**: Criptografia de ponta a ponta via Let's Encrypt.
+*   **Infrastructure Hardening**: As portas de gerência (SSH) são fechadas para a internet, utilizando o **AWS SSM Session Manager** para acesso administrativo.
 
 ---
 

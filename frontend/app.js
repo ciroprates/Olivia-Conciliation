@@ -1,5 +1,5 @@
-const API_URL = 'http://localhost:8080/api';
-const EXECUTION_API_URL = 'http://localhost:3003';
+const API_URL = 'https://bff.olivinha.site/api';
+const EXECUTION_API_URL = 'https://api.olivinha.site';
 
 const app = {
     state: {
@@ -9,16 +9,48 @@ const app = {
         selectedCandidates: new Set(),
         currentExecution: null,
         executionHistory: [],
-        statusPollingInterval: null
+        statusPollingInterval: null,
+        token: localStorage.getItem('olivia_auth_token')
     },
 
     init() {
-        this.navigate('queue');
+        if (!this.state.token) {
+            this.navigate('login');
+        } else {
+            this.navigate('queue');
+        }
+    },
+
+    async authorizedFetch(url, options = {}) {
+        const headers = options.headers || {};
+        if (this.state.token) {
+            headers['Authorization'] = `Bearer ${this.state.token}`;
+        }
+
+        const res = await fetch(url, { ...options, headers });
+
+        if (res.status === 401) {
+            this.logout();
+            throw new Error('Sessão expirada. Faça login novamente.');
+        }
+
+        return res;
     },
 
     navigate(view) {
         this.state.currentView = view;
         const main = document.getElementById('main-content');
+        const logoutBtn = document.getElementById('btn-logout');
+
+        if (view === 'login') {
+            const template = document.getElementById('view-login').content.cloneNode(true);
+            main.innerHTML = '';
+            main.appendChild(template);
+            if (logoutBtn) logoutBtn.classList.add('hidden');
+            return;
+        }
+
+        if (logoutBtn) logoutBtn.classList.remove('hidden');
 
         if (view === 'queue') {
             const template = document.getElementById('view-queue').content.cloneNode(true);
@@ -27,9 +59,12 @@ const app = {
             this.loadQueue();
 
             // Search listener
-            document.getElementById('search').addEventListener('input', (e) => {
-                this.renderQueue(e.target.value);
-            });
+            const searchInput = document.getElementById('search');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    this.renderQueue(e.target.value);
+                });
+            }
         } else if (view === 'details') {
             const template = document.getElementById('view-details').content.cloneNode(true);
             main.innerHTML = '';
@@ -38,15 +73,48 @@ const app = {
         }
     },
 
+    async login() {
+        const user = document.getElementById('login-user').value;
+        const pass = document.getElementById('login-pass').value;
+
+        try {
+            const res = await fetch(`${API_URL}/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: user, password: pass })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                this.state.token = data.token;
+                localStorage.setItem('olivia_auth_token', data.token);
+                this.navigate('queue');
+            } else {
+                alert('Credenciais inválidas');
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Erro ao realizar login');
+        }
+    },
+
+    logout() {
+        this.state.token = null;
+        localStorage.removeItem('olivia_auth_token');
+        this.navigate('login');
+    },
+
     async loadQueue() {
         try {
-            const res = await fetch(`${API_URL}/conciliations`);
+            const res = await this.authorizedFetch(`${API_URL}/conciliations`);
             const data = await res.json();
             this.state.conciliations = data || [];
             this.renderQueue();
         } catch (err) {
             console.error(err);
-            alert('Erro ao carregar conciliações');
+            if (err.message !== 'Sessão expirada. Faça login novamente.') {
+                alert('Erro ao carregar conciliações');
+            }
         }
     },
 
@@ -94,7 +162,7 @@ const app = {
 
     async loadDetails(id) {
         try {
-            const res = await fetch(`${API_URL}/conciliations/${id}`);
+            const res = await this.authorizedFetch(`${API_URL}/conciliations/${id}`);
             const data = await res.json();
             this.state.details = data;
             this.state.selectedCandidates.clear();
@@ -185,7 +253,7 @@ const app = {
         const esIndices = Array.from(this.state.selectedCandidates);
 
         try {
-            const res = await fetch(`${API_URL}/conciliations/${difIndex}/accept`, {
+            const res = await this.authorizedFetch(`${API_URL}/conciliations/${difIndex}/accept`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ esRowIndices: esIndices })
@@ -210,7 +278,7 @@ const app = {
         const difIndex = this.state.details.reference.rowIndex;
 
         try {
-            const res = await fetch(`${API_URL}/conciliations/${difIndex}/reject`, {
+            const res = await this.authorizedFetch(`${API_URL}/conciliations/${difIndex}/reject`, {
                 method: 'POST'
             });
 
@@ -236,7 +304,7 @@ const app = {
         }
 
         try {
-            const res = await fetch(`${EXECUTION_API_URL}/v1/executions/transactions`, {
+            const res = await this.authorizedFetch(`${EXECUTION_API_URL}/v1/executions/transactions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({})
@@ -274,7 +342,7 @@ const app = {
 
     async updateExecutionStatus(executionId) {
         try {
-            const res = await fetch(`${EXECUTION_API_URL}/v1/executions/transactions/${executionId}/status`);
+            const res = await this.authorizedFetch(`${EXECUTION_API_URL}/v1/executions/transactions/${executionId}/status`);
             if (!res.ok) throw new Error('Status not found');
 
             const status = await res.json();
@@ -313,7 +381,7 @@ const app = {
 
     async loadExecutionDetails(executionId) {
         try {
-            const res = await fetch(`${EXECUTION_API_URL}/v1/executions/transactions/${executionId}`);
+            const res = await this.authorizedFetch(`${EXECUTION_API_URL}/v1/executions/transactions/${executionId}`);
             const data = await res.json();
 
             this.updateMetrics(data.metrics);
@@ -336,7 +404,7 @@ const app = {
 
     async loadExecutionHistory() {
         try {
-            const res = await fetch(`${EXECUTION_API_URL}/v1/executions/transactions`);
+            const res = await this.authorizedFetch(`${EXECUTION_API_URL}/v1/executions/transactions`);
             const data = await res.json();
             this.state.executionHistory = data.items || [];
 
@@ -377,7 +445,8 @@ const app = {
     },
 
     closeStatusModal() {
-        document.getElementById('status-modal-container').innerHTML = '';
+        const modal = document.getElementById('status-modal-container');
+        if (modal) modal.innerHTML = '';
     },
 
     translateStep(step) {
