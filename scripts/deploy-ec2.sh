@@ -53,10 +53,19 @@ aws ecr get-login-password --region "$AWS_REGION" | sudo docker login --username
 # 5. Atualização dos containers
 echo "Puxando novas imagens e reiniciando containers..."
 sudo docker compose pull
+CERT_FILE="certbot/conf/live/olivinha.site/fullchain.pem"
+
+if [ ! -s "$CERT_FILE" ]; then
+    echo "[SSL] Certificado não encontrado. Executando bootstrap inicial..."
+    sudo ./scripts/setup-ssl.sh
+else
+    echo "[SSL] Certificado existente encontrado. Pulando bootstrap inicial."
+fi
+
 sudo docker compose up -d
 
-# 6. Renovação de SSL (se necessário)
-echo "Verificando renovação de certificados SSL..."
+# 6. Renovação de SSL
+echo "[SSL] Verificando renovação de certificados..."
 sudo docker compose run --rm certbot renew
 sudo docker compose restart nginx
 
