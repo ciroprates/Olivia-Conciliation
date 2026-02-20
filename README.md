@@ -8,7 +8,7 @@ Sistema inteligente de conciliação financeira automatizada entre **Google Shee
 
 ---
 
-A aplicação utiliza uma arquitetura de microservices orquestrada por Docker, protegida por um Proxy Reverso Nginx com suporte a HTTPS (Let's Encrypt) e uma camada de autenticação **JWT (JSON Web Tokens)**.
+A aplicação utiliza uma arquitetura de microservices orquestrada por Docker, protegida por um Proxy Reverso Nginx com suporte a HTTPS (Let's Encrypt) e autenticação por **cookie de sessão HttpOnly (JWT)** com proteção CSRF.
 
 ```mermaid
 graph TD
@@ -62,7 +62,7 @@ Para testar mudanças rapidamente sem subir toda a infraestrutura:
     ```
 
 > [!WARNING]
-> Ao rodar localmente sem o Nginx, você precisará alterar as constantes `API_URL` e `EXECUTION_API_URL` no arquivo `frontend/app.js` para apontarem para `localhost` em vez dos subdomínios `.site`.
+> Ao rodar localmente sem o Nginx, você precisará ajustar as constantes `API_URL` e `EXECUTION_API_URL` no `frontend/app.js` para URLs locais (`/api` e `/executions` dependem do proxy de borda).
 
 ### 🛠️ Simulando Produção Localmente (Com Docker)
 
@@ -79,7 +79,8 @@ Para testar o roteamento do Nginx no seu computador:
 | Serviço | URL |
 | :--- | :--- |
 | **Aplicação Principal** | [https://console.olivinha.site](https://console.olivinha.site) |
-| **Integração Backend** | [https://bff.olivinha.site](https://bff.olivinha.site) |
+| **API (same-origin)** | [https://console.olivinha.site/api](https://console.olivinha.site/api) |
+| **Execution API (same-origin)** | [https://console.olivinha.site/executions](https://console.olivinha.site/executions) |
 | **Automação n8n** | [https://n8n.olivinha.site](https://n8n.olivinha.site) |
 | **WhatsApp API** | [https://waha.olivinha.site](https://waha.olivinha.site) |
 
@@ -122,7 +123,7 @@ O pipeline executa apenas deploy da aplicação. O SSL deve ser executado manual
 ## 🛡️ Segurança
 
 *   **Proxy Reverso**: Todos os serviços rodam em rede interna Docker, acessíveis apenas via Nginx.
-*   **Autenticação JWT**: Controle de acesso unificado para o Console e APIs, validado na borda pelo Nginx (`auth_request`).
+*   **Sessão HttpOnly + CSRF**: JWT em cookie `HttpOnly` validado na borda pelo Nginx (`auth_request`) e token CSRF para métodos mutáveis.
 *   **SSL/TLS**: Criptografia de ponta a ponta via Let's Encrypt.
 *   **Infrastructure Hardening**: As portas de gerência (SSH) são fechadas para a internet, utilizando o **AWS SSM Session Manager** para acesso administrativo.
 

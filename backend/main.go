@@ -40,36 +40,16 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// Generic middleware for CORS
-	corsMiddleware := func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-			if r.Method == "OPTIONS" {
-				w.WriteHeader(http.StatusOK)
-				return
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-
 	// Public Routes
 	mux.HandleFunc("POST /api/login", h.Login)
+	mux.HandleFunc("POST /api/logout", h.Logout)
+	mux.HandleFunc("/api/auth/verify", h.Verify)
 
 	// Protected Routes
 	protectedMux := http.NewServeMux()
-	protectedMux.HandleFunc("GET /api/auth/verify", h.Verify)
 	protectedMux.HandleFunc("GET /api/conciliations", h.GetConciliations)
 
 	protectedMux.HandleFunc("/api/conciliations/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "OPTIONS" {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-			return
-		}
-
 		path := r.URL.Path
 		if strings.HasSuffix(path, "/accept") && r.Method == "POST" {
 			h.AcceptConciliation(w, r)
@@ -89,13 +69,11 @@ func main() {
 	// Mount protected routes with AuthMiddleware
 	mux.Handle("/api/", h.AuthMiddleware(protectedMux))
 
-	finalHandler := corsMiddleware(mux)
-
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
 
 	log.Printf("Server listening on port %s", port)
-	log.Fatal(http.ListenAndServe(":"+port, finalHandler))
+	log.Fatal(http.ListenAndServe(":"+port, mux))
 }

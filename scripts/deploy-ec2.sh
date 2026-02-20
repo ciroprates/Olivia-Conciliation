@@ -42,6 +42,9 @@ SHEET_REJ=Rejeitados
 ADMIN_USER=$ADMIN_USER
 ADMIN_PASS=$ADMIN_PASS
 JWT_SECRET=$JWT_SECRET
+COOKIE_DOMAIN=console.olivinha.site
+COOKIE_SECURE=true
+APP_ORIGIN=https://console.olivinha.site
 EOF
 
 # 4. Login no ECR
