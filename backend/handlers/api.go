@@ -19,6 +19,11 @@ func NewHandler(svc *service.Logic) *Handler {
 }
 
 func (h *Handler) GetConciliations(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	summary, err := h.svc.GetConciliations()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -29,6 +34,11 @@ func (h *Handler) GetConciliations(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) GetConciliationDetails(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	// Path: /api/conciliations/{id}
 	// Simple parsing, assuming standard mux or manual
 	parts := strings.Split(r.URL.Path, "/")
@@ -53,6 +63,11 @@ func (h *Handler) GetConciliationDetails(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *Handler) AcceptConciliation(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	parts := strings.Split(r.URL.Path, "/")
 	// /api/conciliations/{id}/accept -> parts: [ "", "api", "conciliations", "123", "accept"]
 	if len(parts) < 4 {
@@ -82,6 +97,11 @@ func (h *Handler) AcceptConciliation(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) RejectConciliation(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	parts := strings.Split(r.URL.Path, "/")
 	// /api/conciliations/{id}/reject
 	if len(parts) < 4 {

@@ -41,13 +41,14 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Public Routes
-	mux.HandleFunc("POST /api/login", h.Login)
-	mux.HandleFunc("POST /api/logout", h.Logout)
+	// Use path-based patterns for broader compatibility across deployments.
+	mux.HandleFunc("/api/login", h.Login)
+	mux.HandleFunc("/api/logout", h.Logout)
 	mux.HandleFunc("/api/auth/verify", h.Verify)
 
 	// Protected Routes
 	protectedMux := http.NewServeMux()
-	protectedMux.HandleFunc("GET /api/conciliations", h.GetConciliations)
+	protectedMux.HandleFunc("/api/conciliations", h.GetConciliations)
 
 	protectedMux.HandleFunc("/api/conciliations/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
