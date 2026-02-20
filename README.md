@@ -10,26 +10,13 @@ Sistema inteligente de conciliação financeira automatizada entre **Google Shee
 
 A aplicação utiliza uma arquitetura de microservices orquestrada por Docker, protegida por um Proxy Reverso Nginx com suporte a HTTPS (Let's Encrypt) e autenticação por **cookie de sessão HttpOnly (JWT)** com proteção CSRF.
 
-```mermaid
-graph TD
-    User((Usuário)) ---->|https| Nginx{Nginx Proxy}
-    Nginx ---->|port 80| Frontend[Frontend SPA]
-    Nginx ---->|port 8080| Backend[Go Backend]
-    Nginx ---->|port 3000| OliviaAPI[Olivia API]
-    Nginx ---->|port 5678| n8n[n8n Automation]
-    Nginx ---->|port 3000| WAHA[WhatsApp API]
-    
-    Backend ---->|Read/Write| Sheets((Google Sheets))
-    OliviaAPI ---->|Sync| Pluggy((Pluggy API))
-```
-
 ---
 
 ## 🚀 Como Executar
 
 ### 🐳 Via Docker (Recomendado)
 
-O ambiente completo sobe com um único comando, incluindo os certificados SSL e automações.
+Modo indicado para simular o ambiente de produção com Nginx, SSL e roteamento por domínio.
 
 1.  **Configuração Inicial**:
     ```bash
@@ -42,27 +29,60 @@ O ambiente completo sobe com um único comando, incluindo os certificados SSL e 
     docker compose up -d
     ```
 
+> [!IMPORTANT]
+> Este modo assume:
+> - Certificados já existentes em `certbot/conf` (usados pelo `nginx`).
+> - Imagem `olivia-api` disponível no registry configurado em `ECR_REGISTRY`.
+>
 > O deploy via GitHub Actions não executa bootstrap/renovação de SSL. A gestão do certificado é manual na EC2 via `scripts/setup-ssl.sh`.
 
 ### 💻 Desenvolvimento Local (Sem Docker)
 
 Para testar mudanças rapidamente sem subir toda a infraestrutura:
 
-1.  **Backend (Go)**:
+1.  **Crie o arquivo de ambiente**:
+    ```bash
+    cp .env.example .env
+    ```
+
+2.  **Ajuste variáveis no `.env` para ambiente local**:
+    ```dotenv
+    # já existentes
+    GOOGLE_APPLICATION_CREDENTIALS=/caminho/absoluto/para/sua-chave.json
+    SPREADSHEET_ID=seu_id_da_planilha
+    ADMIN_USER=admin
+    ADMIN_PASS=sua_senha
+    JWT_SECRET=seu_jwt_secret
+
+    # adicionar para dev local
+    APP_ORIGIN=http://localhost:3001
+    COOKIE_SECURE=false
+    COOKIE_DOMAIN=
+    ```
+
+3.  **Backend (Go)**:
     ```bash
     go run backend/main.go
     # O backend subirá em http://localhost:8080
     ```
 
-2.  **Frontend (Vanilla JS)**:
+4.  **Frontend (Vanilla JS)**:
+    Edite `frontend/app.js` para apontar para o backend local sem proxy:
+    ```js
+    const API_URL = 'http://localhost:8080/api';
+    // opcional: se não estiver rodando olivia-api local, mantenha apenas a conciliação manual
+    const EXECUTION_API_URL = 'http://localhost:3000/v1/executions';
+    ```
+
+5.  **Suba o frontend estático**:
     ```bash
     cd frontend
     python3 -m http.server 3001
     # Acesse http://localhost:3001
     ```
 
-> [!WARNING]
-> Ao rodar localmente sem o Nginx, você precisará ajustar as constantes `API_URL` e `EXECUTION_API_URL` no `frontend/app.js` para URLs locais (`/api` e `/executions` dependem do proxy de borda).
+> [!NOTE]
+> No modo sem Docker, as rotas relativas `/api` e `/executions` nao funcionam sem o proxy Nginx.
 
 ### 🛠️ Simulando Produção Localmente (Com Docker)
 
@@ -79,8 +99,6 @@ Para testar o roteamento do Nginx no seu computador:
 | Serviço | URL |
 | :--- | :--- |
 | **Aplicação Principal** | [https://console.olivinha.site](https://console.olivinha.site) |
-| **API (same-origin)** | [https://console.olivinha.site/api](https://console.olivinha.site/api) |
-| **Execution API (same-origin)** | [https://console.olivinha.site/executions](https://console.olivinha.site/executions) |
 | **Automação n8n** | [https://n8n.olivinha.site](https://n8n.olivinha.site) |
 | **WhatsApp API** | [https://waha.olivinha.site](https://waha.olivinha.site) |
 
@@ -110,7 +128,7 @@ O pipeline executa apenas deploy da aplicação. O SSL deve ser executado manual
 
 
 > [!IMPORTANT]
-> O certificado inicial é emitido para os subdomínios `console`, `bff`, `api`, `n8n` e `waha` em `olivinha.site` (não inclui o domínio raiz `olivinha.site`).
+> O certificado inicial é emitido para os subdomínios `console`, `n8n` e `waha` em `olivinha.site` (não inclui o domínio raiz `olivinha.site`).
 > Garanta DNS válido para esses subdomínios e acesso público à porta `80/TCP` para o desafio HTTP-01.
 
 ### 👤 Roles IAM (OIDC) Esperadas
@@ -129,7 +147,7 @@ O pipeline executa apenas deploy da aplicação. O SSL deve ser executado manual
 
 ---
 
-## ## Funcionalidades
+## Funcionalidades
 
 1. **Fila de Conciliações**: Exibe transações que aguardam pareamento manual.
 2. **Algoritmo de Sugestão**: Cruza dados de valor e data para sugerir melhores candidatas.

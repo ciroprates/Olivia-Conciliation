@@ -42,6 +42,32 @@ const app = {
         return res;
     },
 
+    async parseResponseSafely(res) {
+        const raw = await res.text();
+        if (!raw) return { data: null, raw: '' };
+
+        try {
+            return { data: JSON.parse(raw), raw };
+        } catch {
+            return { data: null, raw };
+        }
+    },
+
+    getErrorMessage(payload, fallback = 'Erro desconhecido') {
+        if (payload?.data && typeof payload.data === 'object') {
+            if (payload.data.message) return payload.data.message;
+            if (payload.data.error) return payload.data.error;
+        }
+
+        if (payload?.raw) {
+            // Avoid showing a full HTML page in alerts.
+            const plain = payload.raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+            if (plain) return plain.slice(0, 200);
+        }
+
+        return fallback;
+    },
+
     getCookie(name) {
         const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const match = document.cookie.match(new RegExp(`(?:^|; )${escaped}=([^;]*)`));
@@ -368,20 +394,23 @@ const app = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({})
             });
+            const payload = await this.parseResponseSafely(res);
 
             if (res.status === 202) {
-                const data = await res.json();
+                const data = payload.data;
+                if (!data?.executionId) {
+                    throw new Error('Resposta inválida da API de Processamento');
+                }
                 this.state.currentExecution = data;
 
                 this.openStatusModal();
                 this.startStatusPolling(data.executionId);
             } else {
-                const error = await res.json();
-                alert('Erro ao iniciar: ' + (error.message || 'Erro desconhecido'));
+                alert('Erro ao iniciar: ' + this.getErrorMessage(payload, `HTTP ${res.status}`));
             }
         } catch (err) {
             console.error(err);
-            alert('Erro ao conectar com a API de Processamento');
+            alert(err.message || 'Erro ao conectar com a API de Processamento');
         }
     },
 
@@ -401,7 +430,9 @@ const app = {
             const res = await this.authorizedFetch(`${EXECUTION_API_URL}/transactions/${executionId}/status`);
             if (!res.ok) throw new Error('Status not found');
 
-            const status = await res.json();
+            const payload = await this.parseResponseSafely(res);
+            const status = payload.data;
+            if (!status) throw new Error('Resposta inválida no status da execução');
 
             // Update UI if modal is open
             const statusBadge = document.getElementById('execution-status');
@@ -437,7 +468,9 @@ const app = {
     async loadExecutionDetails(executionId) {
         try {
             const res = await this.authorizedFetch(`${EXECUTION_API_URL}/transactions/${executionId}`);
-            const data = await res.json();
+            const payload = await this.parseResponseSafely(res);
+            const data = payload.data;
+            if (!data) throw new Error('Resposta inválida nos detalhes da execução');
 
             this.updateMetrics(data.metrics);
             this.loadExecutionHistory();
@@ -460,7 +493,9 @@ const app = {
     async loadExecutionHistory() {
         try {
             const res = await this.authorizedFetch(`${EXECUTION_API_URL}/transactions`);
-            const data = await res.json();
+            const payload = await this.parseResponseSafely(res);
+            const data = payload.data;
+            if (!data) throw new Error('Resposta inválida no histórico de execuções');
             this.state.executionHistory = data.items || [];
 
             const list = document.getElementById('history-list');
