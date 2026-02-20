@@ -1,33 +1,38 @@
-const API_URL = 'https://bff.olivinha.site/api';
-const EXECUTION_API_URL = 'https://api.olivinha.site';
+const API_URL = '/api';
+const EXECUTION_API_URL = '/executions';
 
 const app = {
     state: {
+        authenticated: false,
         currentView: 'queue',
         conciliations: [],
         details: null,
         selectedCandidates: new Set(),
         currentExecution: null,
         executionHistory: [],
-        statusPollingInterval: null,
-        token: localStorage.getItem('olivia_auth_token')
+        statusPollingInterval: null
     },
 
-    init() {
-        if (!this.state.token) {
-            this.navigate('login');
-        } else {
-            this.navigate('queue');
-        }
+    async init() {
+        await this.checkSession();
     },
 
     async authorizedFetch(url, options = {}) {
-        const headers = options.headers || {};
-        if (this.state.token) {
-            headers['Authorization'] = `Bearer ${this.state.token}`;
+        const headers = { ...(options.headers || {}) };
+        const method = (options.method || 'GET').toUpperCase();
+
+        if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+            const csrfToken = this.getCookie('olivia_csrf');
+            if (csrfToken) {
+                headers['X-CSRF-Token'] = csrfToken;
+            }
         }
 
-        const res = await fetch(url, { ...options, headers });
+        const res = await fetch(url, {
+            ...options,
+            headers,
+            credentials: 'same-origin'
+        });
 
         if (res.status === 401) {
             this.logout();
@@ -37,20 +42,60 @@ const app = {
         return res;
     },
 
+    getCookie(name) {
+        const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const match = document.cookie.match(new RegExp(`(?:^|; )${escaped}=([^;]*)`));
+        return match ? decodeURIComponent(match[1]) : null;
+    },
+
+    async checkSession() {
+        try {
+            const res = await fetch(`${API_URL}/auth/verify`, {
+                method: 'GET',
+                credentials: 'same-origin'
+            });
+
+            this.state.authenticated = res.ok;
+        } catch (err) {
+            console.error('Session check failed:', err);
+            this.state.authenticated = false;
+        }
+
+        if (this.state.authenticated) {
+            this.navigate('queue');
+            return;
+        }
+
+        this.navigate('login');
+    },
+
+    syncAuthUI() {
+        const isAuthenticatedView = this.state.authenticated && this.state.currentView !== 'login';
+        const processBtn = document.getElementById('btn-process');
+        const logoutBtn = document.getElementById('btn-logout');
+        const indicator = document.getElementById('status-indicator');
+
+        if (processBtn) processBtn.classList.toggle('hidden', !isAuthenticatedView);
+        if (logoutBtn) logoutBtn.classList.toggle('hidden', !isAuthenticatedView);
+        if (indicator) indicator.classList.toggle('hidden', !isAuthenticatedView || !this.state.statusPollingInterval);
+    },
+
     navigate(view) {
+        if (view !== 'login' && !this.state.authenticated) {
+            this.navigate('login');
+            return;
+        }
+
         this.state.currentView = view;
         const main = document.getElementById('main-content');
-        const logoutBtn = document.getElementById('btn-logout');
+        this.syncAuthUI();
 
         if (view === 'login') {
             const template = document.getElementById('view-login').content.cloneNode(true);
             main.innerHTML = '';
             main.appendChild(template);
-            if (logoutBtn) logoutBtn.classList.add('hidden');
             return;
         }
-
-        if (logoutBtn) logoutBtn.classList.remove('hidden');
 
         if (view === 'queue') {
             const template = document.getElementById('view-queue').content.cloneNode(true);
@@ -81,13 +126,13 @@ const app = {
             const res = await fetch(`${API_URL}/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: user, password: pass })
+                body: JSON.stringify({ username: user, password: pass }),
+                credentials: 'same-origin'
             });
 
             if (res.ok) {
-                const data = await res.json();
-                this.state.token = data.token;
-                localStorage.setItem('olivia_auth_token', data.token);
+                await res.json();
+                this.state.authenticated = true;
                 this.navigate('queue');
             } else {
                 alert('Credenciais inválidas');
@@ -98,9 +143,23 @@ const app = {
         }
     },
 
-    logout() {
-        this.state.token = null;
-        localStorage.removeItem('olivia_auth_token');
+    async logout() {
+        this.state.authenticated = false;
+        if (this.state.statusPollingInterval) {
+            clearInterval(this.state.statusPollingInterval);
+            this.state.statusPollingInterval = null;
+        }
+        this.state.currentExecution = null;
+        this.closeStatusModal();
+
+        try {
+            await fetch(`${API_URL}/logout`, {
+                method: 'POST',
+                credentials: 'same-origin'
+            });
+        } catch (err) {
+            console.error(err);
+        }
         this.navigate('login');
     },
 
@@ -304,7 +363,7 @@ const app = {
         }
 
         try {
-            const res = await this.authorizedFetch(`${EXECUTION_API_URL}/v1/executions/transactions`, {
+            const res = await this.authorizedFetch(`${EXECUTION_API_URL}/transactions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({})
@@ -313,10 +372,6 @@ const app = {
             if (res.status === 202) {
                 const data = await res.json();
                 this.state.currentExecution = data;
-
-                // Show indicator
-                const indicator = document.getElementById('status-indicator');
-                if (indicator) indicator.classList.remove('hidden');
 
                 this.openStatusModal();
                 this.startStatusPolling(data.executionId);
@@ -337,12 +392,13 @@ const app = {
             this.updateExecutionStatus(executionId);
         }, 2000);
 
+        this.syncAuthUI();
         this.updateExecutionStatus(executionId);
     },
 
     async updateExecutionStatus(executionId) {
         try {
-            const res = await this.authorizedFetch(`${EXECUTION_API_URL}/v1/executions/transactions/${executionId}/status`);
+            const res = await this.authorizedFetch(`${EXECUTION_API_URL}/transactions/${executionId}/status`);
             if (!res.ok) throw new Error('Status not found');
 
             const status = await res.json();
@@ -362,9 +418,7 @@ const app = {
             if (status.status === 'COMPLETED' || status.status === 'FAILED') {
                 clearInterval(this.state.statusPollingInterval);
                 this.state.statusPollingInterval = null;
-
-                const indicator = document.getElementById('status-indicator');
-                if (indicator) indicator.classList.add('hidden');
+                this.syncAuthUI();
 
                 await this.loadExecutionDetails(executionId);
 
@@ -376,12 +430,13 @@ const app = {
             console.error('Polling error:', err);
             clearInterval(this.state.statusPollingInterval);
             this.state.statusPollingInterval = null;
+            this.syncAuthUI();
         }
     },
 
     async loadExecutionDetails(executionId) {
         try {
-            const res = await this.authorizedFetch(`${EXECUTION_API_URL}/v1/executions/transactions/${executionId}`);
+            const res = await this.authorizedFetch(`${EXECUTION_API_URL}/transactions/${executionId}`);
             const data = await res.json();
 
             this.updateMetrics(data.metrics);
@@ -404,7 +459,7 @@ const app = {
 
     async loadExecutionHistory() {
         try {
-            const res = await this.authorizedFetch(`${EXECUTION_API_URL}/v1/executions/transactions`);
+            const res = await this.authorizedFetch(`${EXECUTION_API_URL}/transactions`);
             const data = await res.json();
             this.state.executionHistory = data.items || [];
 
