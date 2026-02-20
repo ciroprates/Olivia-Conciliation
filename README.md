@@ -42,7 +42,7 @@ O ambiente completo sobe com um único comando, incluindo os certificados SSL e 
     docker compose up -d
     ```
 
-> No deploy via GitHub Actions, o bootstrap SSL já é automático no primeiro deploy. Para execução manual em EC2, use `scripts/setup-ssl.sh`.
+> O deploy via GitHub Actions não executa bootstrap/renovação de SSL. A gestão do certificado é manual na EC2 via `scripts/setup-ssl.sh`.
 
 ### 💻 Desenvolvimento Local (Sem Docker)
 
@@ -99,13 +99,14 @@ O projeto utiliza **GitHub Actions** com **AWS Systems Manager (SSM)** para depl
 | **Secrets** | `GCP_SERVICE_ACCOUNT_KEY`, `SPREADSHEET_ID`, `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `ADMIN_USER`, `ADMIN_PASS`, `JWT_SECRET` |
 | **Variables** | `AWS_REGION`, `ECR_REGISTRY`, `ECR_REPOSITORY`, `AWS_ROLE_BUILD_ARN`, `AWS_ROLE_DEPLOY_ARN`, `APP_DIR`, `DEPLOY_TAG_KEY`, `DEPLOY_TAG_VALUE` |
 
-### 🔒 SSL no Deploy Automatizado
+### 🔒 SSL Manual na EC2
 
-O pipeline executa `scripts/deploy-ec2.sh`, que:
+O pipeline executa apenas deploy da aplicação. O SSL deve ser executado manualmente na EC2:
 
-1. verifica se o certificado em `certbot/conf/live/olivinha.site/fullchain.pem` já existe;
-2. se não existir, executa `scripts/setup-ssl.sh` para bootstrap do Let's Encrypt;
-3. se existir, segue com deploy normal e `certbot renew`.
+1. `cd $APP_DIR`
+2. `chmod +x scripts/setup-ssl.sh`
+3. `sudo ./scripts/setup-ssl.sh`
+
 
 > [!IMPORTANT]
 > O certificado inicial é emitido para os subdomínios `console`, `bff`, `api`, `n8n` e `waha` em `olivinha.site` (não inclui o domínio raiz `olivinha.site`).

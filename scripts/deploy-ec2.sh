@@ -15,11 +15,6 @@ echo "--- Iniciando Deploy ---"
 
 cd "$APP_DIR"
 
-is_letsencrypt_cert() {
-    local cert_path="$1"
-    [ -s "$cert_path" ] && openssl x509 -in "$cert_path" -noout -issuer 2>/dev/null | grep -qi "Let's Encrypt"
-}
-
 # 1. Atualiza o docker-compose para a versão enviada pelo SCP
 if [ -f "docker-compose.new" ]; then
     echo "Movendo novo docker-compose.yml..."
@@ -58,23 +53,9 @@ aws ecr get-login-password --region "$AWS_REGION" | sudo docker login --username
 # 5. Atualização dos containers
 echo "Puxando novas imagens e reiniciando containers..."
 sudo docker compose pull
-CERT_FILE="certbot/conf/live/olivinha.site/fullchain.pem"
-
-if ! is_letsencrypt_cert "$CERT_FILE"; then
-    echo "[SSL] Certificado Let's Encrypt ausente/inválido. Executando bootstrap inicial..."
-    sudo ./scripts/setup-ssl.sh
-else
-    echo "[SSL] Certificado Let's Encrypt válido encontrado. Pulando bootstrap inicial."
-fi
-
 sudo docker compose up -d
 
-# 6. Renovação de SSL
-echo "[SSL] Verificando renovação de certificados..."
-sudo docker compose run --rm certbot renew
-sudo docker compose restart nginx
-
-# 7. Limpeza
+# 6. Limpeza
 echo "Limpando imagens antigas..."
 sudo docker image prune -f
 
