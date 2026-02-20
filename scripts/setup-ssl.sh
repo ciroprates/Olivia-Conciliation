@@ -21,14 +21,51 @@ is_letsencrypt_cert() {
     [ -s "$cert_path" ] && openssl x509 -in "$cert_path" -noout -issuer 2>/dev/null | grep -qi "Let's Encrypt"
 }
 
+# Remove renewal configs quebradas no host para não derrubar certbot renew depois.
+# Isso resolve o caso: /etc/letsencrypt/renewal/olivinha.site.conf (parsefail).
+cleanup_broken_renewal_configs() {
+    local f
+    shopt -s nullglob
+    for f in /etc/letsencrypt/renewal/*.conf; do
+        # Se não contém referências mínimas, remove.
+        if ! grep -qE '^\s*cert\s*=' "$f" \
+          || ! grep -qE '^\s*privkey\s*=' "$f" \
+          || ! grep -qE '^\s*fullchain\s*=' "$f"; then
+            echo "[SSL] Removendo renewal conf inválida (campos ausentes): $f"
+            sudo rm -f "$f" || rm -f "$f"
+            continue
+        fi
+
+        # Extrai paths e valida existência.
+        local cert priv full
+        cert="$(awk -F'= ' '/^\s*cert\s*=/{print $2}' "$f" | tail -n1)"
+        priv="$(awk -F'= ' '/^\s*privkey\s*=/{print $2}' "$f" | tail -n1)"
+        full="$(awk -F'= ' '/^\s*fullchain\s*=/{print $2}' "$f" | tail -n1)"
+
+        if [ -n "${cert:-}" ] && [ -n "${priv:-}" ] && [ -n "${full:-}" ] \
+          && [ -f "$cert" ] && [ -f "$priv" ] && [ -f "$full" ]; then
+            continue
+        fi
+
+        echo "[SSL] Removendo renewal conf inválida (paths faltando): $f"
+        sudo rm -f "$f" || rm -f "$f"
+    done
+    shopt -u nullglob
+}
+
+# Determinístico: escolhe lineage cujo certificado expira mais tarde (mais "novo").
 find_latest_letsencrypt_lineage() {
-    local candidate cert_path
-    local latest=""
+    local candidate cert_path latest="" latest_ts=0 ts enddate
     shopt -s nullglob
     for candidate in "certbot/conf/live/$ROOT_DOMAIN" "certbot/conf/live/$ROOT_DOMAIN"-*; do
         cert_path="$candidate/fullchain.pem"
         if is_letsencrypt_cert "$cert_path"; then
-            latest="$candidate"
+            enddate="$(openssl x509 -in "$cert_path" -noout -enddate 2>/dev/null | cut -d= -f2 || true)"
+            ts="$(date -d "$enddate" +%s 2>/dev/null || echo 0)"
+            if [ "$ts" -ge "$latest_ts" ]; then
+                latest_ts="$ts"
+                latest="$candidate"
+            fi
         fi
     done
     shopt -u nullglob
@@ -49,6 +86,9 @@ echo "--- Iniciando processo de geração de certificados ---"
 # 1. Criar diretórios necessários
 mkdir -p certbot/conf certbot/www
 
+# 1.1 Limpa lixo de renewal configs quebradas no host (idempotente)
+cleanup_broken_renewal_configs || true
+
 # Se já houver um certificado Let's Encrypt em qualquer lineage (olivinha.site ou olivinha.site-0001 etc.),
 # normaliza o caminho primário para manter compatibilidade com nginx.conf.
 EXISTING_LINEAGE="$(find_latest_letsencrypt_lineage || true)"
@@ -65,7 +105,7 @@ fi
 if ! is_letsencrypt_cert "$CERT_FILE"; then
     echo "Gerando certificado temporário para o Nginx subir..."
     mkdir -p "$CERT_DIR"
-    openssl req -x509 -nodes -newkey rsa:2048 -days 1\
+    openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
       -keyout "$KEY_FILE" \
       -out "$CERT_FILE" \
       -subj "/CN=localhost"
