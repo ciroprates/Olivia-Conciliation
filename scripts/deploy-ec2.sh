@@ -24,7 +24,7 @@ fi
 # 2. Gera o key.json para acesso ao GCP
 echo "Gerando key.json..."
 echo "$GCP_SERVICE_ACCOUNT_KEY" | base64 -d > key.json
-chmod 600 key.json
+chmod 644 key.json
 
 # 3. Cria o arquivo .env
 echo "Criando arquivo .env..."

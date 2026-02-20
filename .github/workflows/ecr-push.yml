@@ -14,8 +14,6 @@ env:
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
   AWS_ROLE_BUILD_ARN: ${{ vars.AWS_ROLE_BUILD_ARN }}
   AWS_ROLE_DEPLOY_ARN: ${{ vars.AWS_ROLE_DEPLOY_ARN }}
-  EC2_HOST: ${{ vars.EC2_HOST }}
-  EC2_USER: ${{ vars.EC2_USER }}
   APP_DIR: ${{ vars.APP_DIR }}
 
 jobs:
