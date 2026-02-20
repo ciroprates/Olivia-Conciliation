@@ -1,6 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
+# Garante execução consistente mesmo quando chamado fora da raiz do projeto.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
+
 # Este script automatiza a geração inicial dos certificados SSL usando Certbot
 # IMPORTANTE: Os domínios já devem estar apontando para este IP na GoDaddy!
 
@@ -36,8 +41,8 @@ if ! is_letsencrypt_cert; then
       -subj "/CN=localhost"
 fi
 
-# 3. Subir containers
-docker compose up -d nginx
+# 3. Subir/recriar nginx para garantir bind mounts corretos do certbot.
+docker compose up -d --force-recreate nginx
 
 # 4. Aguardar nginx ficar pronto para responder os challenges ACME.
 echo "Aguardando Nginx ficar pronto para validação ACME..."
@@ -47,6 +52,14 @@ PROBE_PATH="$PROBE_DIR/$PROBE_FILE"
 PROBE_CONTENT="acme-ready"
 mkdir -p "$PROBE_DIR"
 echo "$PROBE_CONTENT" > "$PROBE_PATH"
+
+# Sanity check: arquivo de probe deve estar visível dentro do container nginx.
+if ! docker compose exec -T nginx sh -c "test -f /var/www/certbot/.well-known/acme-challenge/$PROBE_FILE"; then
+    echo "Probe ACME não está visível dentro do nginx (/var/www/certbot)."
+    echo "Verifique se o bind mount ./certbot/www -> /var/www/certbot está correto."
+    rm -f "$PROBE_PATH"
+    exit 1
+fi
 
 MAX_READY_ATTEMPTS=12
 READY_ATTEMPT=1
