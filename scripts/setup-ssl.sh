@@ -17,7 +17,31 @@ CERT_FILE="$CERT_DIR/fullchain.pem"
 KEY_FILE="$CERT_DIR/privkey.pem"
 
 is_letsencrypt_cert() {
-    [ -s "$CERT_FILE" ] && openssl x509 -in "$CERT_FILE" -noout -issuer 2>/dev/null | grep -qi "Let's Encrypt"
+    local cert_path="$1"
+    [ -s "$cert_path" ] && openssl x509 -in "$cert_path" -noout -issuer 2>/dev/null | grep -qi "Let's Encrypt"
+}
+
+find_latest_letsencrypt_lineage() {
+    local candidate cert_path
+    local latest=""
+    shopt -s nullglob
+    for candidate in "certbot/conf/live/$ROOT_DOMAIN" "certbot/conf/live/$ROOT_DOMAIN"-*; do
+        cert_path="$candidate/fullchain.pem"
+        if is_letsencrypt_cert "$cert_path"; then
+            latest="$candidate"
+        fi
+    done
+    shopt -u nullglob
+    [ -n "$latest" ] && printf '%s\n' "$latest"
+}
+
+link_primary_cert_to_lineage() {
+    local lineage_dir="$1"
+    local lineage_name
+    lineage_name="$(basename "$lineage_dir")"
+    mkdir -p "$CERT_DIR"
+    ln -sfn "../$lineage_name/fullchain.pem" "$CERT_FILE"
+    ln -sfn "../$lineage_name/privkey.pem" "$KEY_FILE"
 }
 
 echo "--- Iniciando processo de geração de certificados ---"
@@ -25,14 +49,20 @@ echo "--- Iniciando processo de geração de certificados ---"
 # 1. Criar diretórios necessários
 mkdir -p certbot/conf certbot/www
 
-# Se o certificado já for Let's Encrypt válido, não faz nada.
-if is_letsencrypt_cert; then
+# Se já houver um certificado Let's Encrypt em qualquer lineage (olivinha.site ou olivinha.site-0001 etc.),
+# normaliza o caminho primário para manter compatibilidade com nginx.conf.
+EXISTING_LINEAGE="$(find_latest_letsencrypt_lineage || true)"
+if [ -n "$EXISTING_LINEAGE" ]; then
+    if [ "$EXISTING_LINEAGE" != "$CERT_DIR" ]; then
+        echo "Encontrado certificado Let's Encrypt em $(basename "$EXISTING_LINEAGE"). Normalizando links em $CERT_DIR..."
+        link_primary_cert_to_lineage "$EXISTING_LINEAGE"
+    fi
     echo "Certificado Let's Encrypt já existe. Nada a fazer."
     exit 0
 fi
 
 # 2. Gera certificado temporário apenas se necessário para o nginx subir na 1a emissão.
-if ! is_letsencrypt_cert; then
+if ! is_letsencrypt_cert "$CERT_FILE"; then
     echo "Gerando certificado temporário para o Nginx subir..."
     mkdir -p "$CERT_DIR"
     openssl req -x509 -nodes -newkey rsa:2048 -days 1\
@@ -93,6 +123,11 @@ rm -f "$PROBE_PATH"
 
 # 5. Solicitar certificados reais
 echo "Solicitando certificados para: ${DOMAINS[*]}"
+
+# Remove o fallback CN=localhost antes do certbot criar o lineage real "olivinha.site".
+rm -f "$CERT_FILE" "$KEY_FILE"
+rmdir "$CERT_DIR" 2>/dev/null || true
+
 CERTBOT_ARGS=(certonly --cert-name "$ROOT_DOMAIN" --webroot --webroot-path=/var/www/certbot --email "$EMAIL" --agree-tos --no-eff-email)
 for domain in "${DOMAINS[@]}"; do
     CERTBOT_ARGS+=(-d "$domain")
@@ -117,6 +152,13 @@ while true; do
     sleep "$SLEEP_SECONDS"
     ATTEMPT=$((ATTEMPT + 1))
 done
+
+# Garante que o caminho primário continue estável mesmo quando o certbot usar sufixos (-0001, -0002...).
+ISSUED_LINEAGE="$(find_latest_letsencrypt_lineage || true)"
+if [ -n "$ISSUED_LINEAGE" ] && [ "$ISSUED_LINEAGE" != "$CERT_DIR" ]; then
+    echo "Normalizando links do certificado primário para $(basename "$ISSUED_LINEAGE")..."
+    link_primary_cert_to_lineage "$ISSUED_LINEAGE"
+fi
 
 # 6. Reiniciar o Nginx para ler os novos certificados
 docker compose restart nginx
