@@ -42,11 +42,7 @@ O ambiente completo sobe com um único comando, incluindo os certificados SSL e 
     docker compose up -d
     ```
 
-3.  **Ativação SSL (Apenas EC2)**:
-    ```bash
-    chmod +x scripts/setup-ssl.sh
-    ./scripts/setup-ssl.sh
-    ```
+> No deploy via GitHub Actions, o bootstrap SSL já é automático no primeiro deploy. Para execução manual em EC2, use `scripts/setup-ssl.sh`.
 
 ### 💻 Desenvolvimento Local (Sem Docker)
 
@@ -102,6 +98,18 @@ O projeto utiliza **GitHub Actions** com **AWS Systems Manager (SSM)** para depl
 | :--- | :--- |
 | **Secrets** | `GCP_SERVICE_ACCOUNT_KEY`, `SPREADSHEET_ID`, `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `ADMIN_USER`, `ADMIN_PASS`, `JWT_SECRET` |
 | **Variables** | `AWS_REGION`, `ECR_REGISTRY`, `ECR_REPOSITORY`, `AWS_ROLE_BUILD_ARN`, `AWS_ROLE_DEPLOY_ARN`, `APP_DIR`, `DEPLOY_TAG_KEY`, `DEPLOY_TAG_VALUE` |
+
+### 🔒 SSL no Deploy Automatizado
+
+O pipeline executa `scripts/deploy-ec2.sh`, que:
+
+1. verifica se o certificado em `certbot/conf/live/olivinha.site/fullchain.pem` já existe;
+2. se não existir, executa `scripts/setup-ssl.sh` para bootstrap do Let's Encrypt;
+3. se existir, segue com deploy normal e `certbot renew`.
+
+> [!IMPORTANT]
+> O certificado inicial é emitido para os subdomínios `console`, `bff`, `api`, `n8n` e `waha` em `olivinha.site` (não inclui o domínio raiz `olivinha.site`).
+> Garanta DNS válido para esses subdomínios e acesso público à porta `80/TCP` para o desafio HTTP-01.
 
 ### 👤 Roles IAM (OIDC) Esperadas
 
