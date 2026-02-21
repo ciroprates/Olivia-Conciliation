@@ -109,6 +109,7 @@ jobs:
               "export ADMIN_USER=\"${{ secrets.ADMIN_USER }}\"",
               "export ADMIN_PASS=\"${{ secrets.ADMIN_PASS }}\"",
               "export JWT_SECRET=\"${{ secrets.JWT_SECRET }}\"",
+              "export BANKS_JSON='${{ secrets.BANKS_JSON }}'",
               "${{ env.APP_DIR }}/scripts/deploy-ec2.sh"
             ]' \
             --query "Command.CommandId" \

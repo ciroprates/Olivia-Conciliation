@@ -66,6 +66,31 @@
                     <span id="pending-count">0 pendentes</span>
                 </div>
             </div>
+            <div class="execution-options glass-panel">
+                <div class="execution-options-header">
+                    <h3>Configuração da execução</h3>
+                    <button type="button" class="btn-ghost" id="btn-options-reset">Restaurar padrão</button>
+                </div>
+                <div class="execution-options-grid">
+                    <div class="option-group">
+                        <label for="opt-start-date">Data inicial</label>
+                        <input type="date" id="opt-start-date" class="glass-input option-date">
+                        <small id="opt-start-date-error" class="option-error hidden"></small>
+                    </div>
+                    <div class="option-group">
+                        <span class="option-label">Categorias para excluir</span>
+                        <label class="option-check">
+                            <input type="checkbox" id="opt-exclude-same-person" value="Same person transfer">
+                            <span>Same person transfer</span>
+                        </label>
+                        <label class="option-check">
+                            <input type="checkbox" id="opt-exclude-credit-card" value="Credit card payment">
+                            <span>Credit card payment</span>
+                        </label>
+                    </div>
+                </div>
+                <p id="execution-options-summary" class="execution-options-summary"></p>
+            </div>
             <div class="card-list" id="conciliation-list">
                 <!-- Items -->
             </div>

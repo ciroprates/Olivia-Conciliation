@@ -115,8 +115,22 @@ O projeto utiliza **GitHub Actions** com **AWS Systems Manager (SSM)** para depl
 
 | Tipo | Chaves |
 | :--- | :--- |
-| **Secrets** | `GCP_SERVICE_ACCOUNT_KEY`, `SPREADSHEET_ID`, `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `ADMIN_USER`, `ADMIN_PASS`, `JWT_SECRET` |
+| **Secrets** | `GCP_SERVICE_ACCOUNT_KEY`, `SPREADSHEET_ID`, `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `ADMIN_USER`, `ADMIN_PASS`, `JWT_SECRET`, `BANKS_JSON` |
 | **Variables** | `AWS_REGION`, `ECR_REGISTRY`, `ECR_REPOSITORY`, `AWS_ROLE_BUILD_ARN`, `AWS_ROLE_DEPLOY_ARN`, `APP_DIR`, `DEPLOY_TAG_KEY`, `DEPLOY_TAG_VALUE` |
+
+#### Novo secret: `BANKS_JSON`
+
+Use este secret para enviar a lista de bancos permitidos para o `olivia-api` sem expor IDs no frontend.
+
+- Formato: JSON array em uma linha.
+- Exemplo:
+  ```json
+  ["1dc87ce3-58d5-4178-a309-f6a9d9848e21","cf1c1196-d723-4049-951e-3fb64767b181","1418158d-30c1-4ad3-8cc6-0de640bc5cf5"]
+  ```
+- Fluxo:
+  - O GitHub Actions exporta `BANKS_JSON` durante o deploy.
+  - O `scripts/deploy-ec2.sh` grava essa variável no `.env`.
+  - O container `olivia-api` recebe `BANKS_JSON` via `env_file` no `docker-compose.yml`.
 
 ### 🔒 SSL Manual na EC2
 

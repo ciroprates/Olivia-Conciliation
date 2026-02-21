@@ -99,6 +99,81 @@ header h1 {
     margin-bottom: 2rem;
 }
 
+.execution-options {
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--glass-border);
+}
+
+.execution-options-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.execution-options-header h3 {
+    margin: 0;
+    color: var(--primary);
+}
+
+.execution-options-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.option-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.option-group label,
+.option-label {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.option-date {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.option-group .option-check {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: var(--text-main);
+    font-size: 0.95rem;
+}
+
+.option-error {
+    color: #fda4af;
+    font-size: 0.8rem;
+}
+
+.execution-options-summary {
+    margin: 1rem 0 0 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--glass-border);
+    padding: 0.45rem 0.75rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-ghost:hover {
+    color: white;
+    border-color: white;
+}
+
 .glass-input {
     background: rgba(0, 0, 0, 0.2);
     border: 1px solid var(--glass-border);
@@ -667,4 +742,21 @@ header h1 {
 
 .btn-logout.hidden {
     display: none;
+}
+
+@media (max-width: 900px) {
+    .filters {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+
+    .filters .glass-input {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .execution-options-grid {
+        grid-template-columns: 1fr;
+    }
 }

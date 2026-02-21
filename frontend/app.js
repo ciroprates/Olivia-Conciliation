@@ -1,5 +1,10 @@
 const API_URL = '/api';
 const EXECUTION_API_URL = '/executions';
+const EXECUTION_OPTIONS_STORAGE_KEY = 'olivia_execution_options_v1';
+const DEFAULT_EXECUTION_OPTIONS = {
+    excludeCategories: ['Same person transfer', 'Credit card payment'],
+    startDate: '2026-01-15'
+};
 
 const app = {
     state: {
@@ -10,7 +15,8 @@ const app = {
         selectedCandidates: new Set(),
         currentExecution: null,
         executionHistory: [],
-        statusPollingInterval: null
+        statusPollingInterval: null,
+        executionOptions: { ...DEFAULT_EXECUTION_OPTIONS }
     },
 
     async init() {
@@ -127,6 +133,7 @@ const app = {
             const template = document.getElementById('view-queue').content.cloneNode(true);
             main.innerHTML = '';
             main.appendChild(template);
+            this.initializeExecutionOptionsUI();
             this.loadQueue();
 
             // Search listener
@@ -243,6 +250,163 @@ const app = {
             el.onclick = () => this.loadDetails(item.difRowIndex);
             list.appendChild(el);
         });
+    },
+
+    loadExecutionOptions() {
+        const fallback = { ...DEFAULT_EXECUTION_OPTIONS };
+        try {
+            const raw = localStorage.getItem(EXECUTION_OPTIONS_STORAGE_KEY);
+            if (!raw) return fallback;
+            const parsed = JSON.parse(raw);
+            return this.normalizeExecutionOptions(parsed);
+        } catch (err) {
+            console.warn('Falha ao carregar opções salvas, usando padrão:', err);
+            return fallback;
+        }
+    },
+
+    normalizeExecutionOptions(options) {
+        const normalized = { ...DEFAULT_EXECUTION_OPTIONS };
+        const incoming = options && typeof options === 'object' ? options : {};
+
+        if (typeof incoming.startDate === 'string' && this.isValidISODate(incoming.startDate)) {
+            normalized.startDate = incoming.startDate;
+        }
+
+        if (Array.isArray(incoming.excludeCategories)) {
+            normalized.excludeCategories = incoming.excludeCategories
+                .filter(v => typeof v === 'string' && v.trim() !== '')
+                .map(v => v.trim());
+        }
+
+        return normalized;
+    },
+
+    saveExecutionOptions(options) {
+        try {
+            localStorage.setItem(EXECUTION_OPTIONS_STORAGE_KEY, JSON.stringify(options));
+        } catch (err) {
+            console.warn('Falha ao salvar opções de execução:', err);
+        }
+    },
+
+    initializeExecutionOptionsUI() {
+        this.state.executionOptions = this.loadExecutionOptions();
+        this.fillExecutionOptionsForm(this.state.executionOptions);
+        this.renderExecutionOptionsSummary(this.state.executionOptions);
+        this.clearStartDateError();
+
+        const startDateInput = document.getElementById('opt-start-date');
+        const samePersonInput = document.getElementById('opt-exclude-same-person');
+        const creditCardInput = document.getElementById('opt-exclude-credit-card');
+        const resetBtn = document.getElementById('btn-options-reset');
+
+        const onChange = () => {
+            const options = this.readExecutionOptionsFromForm();
+            this.state.executionOptions = options;
+            this.saveExecutionOptions(options);
+            this.renderExecutionOptionsSummary(options);
+        };
+
+        if (startDateInput) {
+            startDateInput.addEventListener('input', () => {
+                this.clearStartDateError();
+                onChange();
+            });
+        }
+        if (samePersonInput) samePersonInput.addEventListener('change', onChange);
+        if (creditCardInput) creditCardInput.addEventListener('change', onChange);
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                const defaults = { ...DEFAULT_EXECUTION_OPTIONS };
+                this.state.executionOptions = defaults;
+                this.fillExecutionOptionsForm(defaults);
+                this.clearStartDateError();
+                this.saveExecutionOptions(defaults);
+                this.renderExecutionOptionsSummary(defaults);
+            });
+        }
+    },
+
+    fillExecutionOptionsForm(options) {
+        const startDateInput = document.getElementById('opt-start-date');
+        const samePersonInput = document.getElementById('opt-exclude-same-person');
+        const creditCardInput = document.getElementById('opt-exclude-credit-card');
+
+        if (startDateInput) startDateInput.value = options.startDate || '';
+        if (samePersonInput) {
+            samePersonInput.checked = (options.excludeCategories || []).includes('Same person transfer');
+        }
+        if (creditCardInput) {
+            creditCardInput.checked = (options.excludeCategories || []).includes('Credit card payment');
+        }
+    },
+
+    readExecutionOptionsFromForm() {
+        const startDateInput = document.getElementById('opt-start-date');
+        if (!startDateInput) {
+            return this.normalizeExecutionOptions(this.state.executionOptions);
+        }
+
+        const startDate = startDateInput.value || '';
+        const excludeCategories = [];
+
+        const samePersonInput = document.getElementById('opt-exclude-same-person');
+        const creditCardInput = document.getElementById('opt-exclude-credit-card');
+
+        if (samePersonInput?.checked) excludeCategories.push(samePersonInput.value);
+        if (creditCardInput?.checked) excludeCategories.push(creditCardInput.value);
+
+        const options = {};
+        if (startDate) options.startDate = startDate;
+        options.excludeCategories = excludeCategories;
+
+        return this.normalizeExecutionOptions(options);
+    },
+
+    renderExecutionOptionsSummary(options) {
+        const summaryEl = document.getElementById('execution-options-summary');
+        if (!summaryEl) return;
+
+        const date = options.startDate ? new Date(`${options.startDate}T00:00:00`).toLocaleDateString('pt-BR') : '-';
+        const excludedCount = (options.excludeCategories || []).length;
+        summaryEl.textContent = `Data inicial: ${date} | ${excludedCount} categoria(s) excluída(s)`;
+    },
+
+    isValidISODate(value) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+        const date = new Date(`${value}T00:00:00Z`);
+        return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+    },
+
+    validateStartDateOrThrow() {
+        const options = this.state.executionOptions || {};
+        if (!options.startDate || !this.isValidISODate(options.startDate)) {
+            this.showStartDateError('Informe uma data válida no formato YYYY-MM-DD.');
+            throw new Error('Data inicial inválida');
+        }
+
+        const inputDate = new Date(`${options.startDate}T00:00:00`);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (inputDate > today) {
+            this.showStartDateError('A data inicial não pode ser futura.');
+            throw new Error('Data inicial futura');
+        }
+    },
+
+    showStartDateError(message) {
+        const errorEl = document.getElementById('opt-start-date-error');
+        if (!errorEl) return;
+        errorEl.textContent = message;
+        errorEl.classList.remove('hidden');
+    },
+
+    clearStartDateError() {
+        const errorEl = document.getElementById('opt-start-date-error');
+        if (!errorEl) return;
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
     },
 
     async loadDetails(id) {
@@ -389,10 +553,17 @@ const app = {
         }
 
         try {
+            this.state.executionOptions = this.readExecutionOptionsFromForm();
+            this.saveExecutionOptions(this.state.executionOptions);
+            this.renderExecutionOptionsSummary(this.state.executionOptions);
+            this.validateStartDateOrThrow();
+
             const res = await this.authorizedFetch(`${EXECUTION_API_URL}/transactions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({})
+                body: JSON.stringify({
+                    options: this.state.executionOptions
+                })
             });
             const payload = await this.parseResponseSafely(res);
 
