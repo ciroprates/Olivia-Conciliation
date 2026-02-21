@@ -87,31 +87,52 @@ jobs:
 
           echo "Iniciando deploy via SSM na instância $INSTANCE_ID..."
 
+          SSM_PARAMETERS=$(jq -cn \
+            --arg app_dir "${{ env.APP_DIR }}" \
+            --arg aws_region "${{ env.AWS_REGION }}" \
+            --arg ecr_registry "${{ env.ECR_REGISTRY }}" \
+            --arg ecr_repository "${{ env.ECR_REPOSITORY }}" \
+            --arg docker_compose_b64 "$DOCKER_COMPOSE_B64" \
+            --arg deploy_script_b64 "$DEPLOY_SCRIPT_B64" \
+            --arg nginx_conf_b64 "$NGINX_CONF_B64" \
+            --arg setup_ssl_b64 "$SETUP_SSL_B64" \
+            --arg gcp_key "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" \
+            --arg spreadsheet_id "${{ secrets.SPREADSHEET_ID }}" \
+            --arg pluggy_client_id "${{ secrets.PLUGGY_CLIENT_ID }}" \
+            --arg pluggy_client_secret "${{ secrets.PLUGGY_CLIENT_SECRET }}" \
+            --arg admin_user "${{ secrets.ADMIN_USER }}" \
+            --arg admin_pass "${{ secrets.ADMIN_PASS }}" \
+            --arg jwt_secret "${{ secrets.JWT_SECRET }}" \
+            --arg banks_json "${{ secrets.BANKS_JSON }}" \
+            '{
+              commands: [
+                "mkdir -p \($app_dir)/scripts \($app_dir)/nginx",
+                "echo \($docker_compose_b64 | @sh) | base64 -d > \($app_dir)/docker-compose.new",
+                "echo \($deploy_script_b64 | @sh) | base64 -d > \($app_dir)/scripts/deploy-ec2.sh",
+                "echo \($nginx_conf_b64 | @sh) | base64 -d > \($app_dir)/nginx/nginx.conf",
+                "echo \($setup_ssl_b64 | @sh) | base64 -d > \($app_dir)/scripts/setup-ssl.sh",
+                "chmod +x \($app_dir)/scripts/deploy-ec2.sh \($app_dir)/scripts/setup-ssl.sh",
+                "export APP_DIR=\($app_dir | @sh)",
+                "export AWS_REGION=\($aws_region | @sh)",
+                "export ECR_REGISTRY=\($ecr_registry | @sh)",
+                "export ECR_REPOSITORY=\($ecr_repository | @sh)",
+                "export GCP_SERVICE_ACCOUNT_KEY=\($gcp_key | @sh)",
+                "export SPREADSHEET_ID=\($spreadsheet_id | @sh)",
+                "export PLUGGY_CLIENT_ID=\($pluggy_client_id | @sh)",
+                "export PLUGGY_CLIENT_SECRET=\($pluggy_client_secret | @sh)",
+                "export ADMIN_USER=\($admin_user | @sh)",
+                "export ADMIN_PASS=\($admin_pass | @sh)",
+                "export JWT_SECRET=\($jwt_secret | @sh)",
+                "export BANKS_JSON=\($banks_json | @sh)",
+                "\($app_dir)/scripts/deploy-ec2.sh"
+              ]
+            }')
+
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "Deploy Olivia Conciliation" \
-            --parameters 'commands=[
-              "mkdir -p ${{ env.APP_DIR }}/scripts ${{ env.APP_DIR }}/nginx",
-              "echo '"$DOCKER_COMPOSE_B64"' | base64 -d > ${{ env.APP_DIR }}/docker-compose.new",
-              "echo '"$DEPLOY_SCRIPT_B64"' | base64 -d > ${{ env.APP_DIR }}/scripts/deploy-ec2.sh",
-              "echo '"$NGINX_CONF_B64"' | base64 -d > ${{ env.APP_DIR }}/nginx/nginx.conf",
-              "echo '"$SETUP_SSL_B64"' | base64 -d > ${{ env.APP_DIR }}/scripts/setup-ssl.sh",
-              "chmod +x ${{ env.APP_DIR }}/scripts/deploy-ec2.sh ${{ env.APP_DIR }}/scripts/setup-ssl.sh",
-              "export APP_DIR=${{ env.APP_DIR }}",
-              "export AWS_REGION=${{ env.AWS_REGION }}",
-              "export ECR_REGISTRY=${{ env.ECR_REGISTRY }}",
-              "export ECR_REPOSITORY=${{ env.ECR_REPOSITORY }}",
-              "export GCP_SERVICE_ACCOUNT_KEY=\"${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}\"",
-              "export SPREADSHEET_ID=\"${{ secrets.SPREADSHEET_ID }}\"",
-              "export PLUGGY_CLIENT_ID=\"${{ secrets.PLUGGY_CLIENT_ID }}\"",
-              "export PLUGGY_CLIENT_SECRET=\"${{ secrets.PLUGGY_CLIENT_SECRET }}\"",
-              "export ADMIN_USER=\"${{ secrets.ADMIN_USER }}\"",
-              "export ADMIN_PASS=\"${{ secrets.ADMIN_PASS }}\"",
-              "export JWT_SECRET=\"${{ secrets.JWT_SECRET }}\"",
-              "export BANKS_JSON='${{ secrets.BANKS_JSON }}'",
-              "${{ env.APP_DIR }}/scripts/deploy-ec2.sh"
-            ]' \
+            --parameters "$SSM_PARAMETERS" \
             --query "Command.CommandId" \
             --output text)
 
