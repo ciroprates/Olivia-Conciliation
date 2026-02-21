@@ -28,6 +28,15 @@ chmod 644 key.json
 
 # 3. Cria o arquivo .env
 echo "Criando arquivo .env..."
+
+# BANKS_JSON pode vir formatado em múltiplas linhas (ex.: JSON pretty-printed)
+# e quebrar o parse do docker compose. Compactamos para uma linha.
+if command -v jq >/dev/null 2>&1; then
+    BANKS_JSON_COMPACT=$(printf '%s' "$BANKS_JSON" | jq -c . 2>/dev/null || printf '%s' "$BANKS_JSON" | tr -d '\r\n')
+else
+    BANKS_JSON_COMPACT=$(printf '%s' "$BANKS_JSON" | tr -d '\r\n')
+fi
+
 cat > .env <<EOF
 GOOGLE_APPLICATION_CREDENTIALS=$APP_DIR/key.json
 SPREADSHEET_ID=$SPREADSHEET_ID
@@ -42,7 +51,7 @@ SHEET_REJ=Rejeitados
 ADMIN_USER=$ADMIN_USER
 ADMIN_PASS=$ADMIN_PASS
 JWT_SECRET=$JWT_SECRET
-BANKS_JSON=$BANKS_JSON
+BANKS_JSON=$BANKS_JSON_COMPACT
 COOKIE_DOMAIN=console.olivinha.site
 COOKIE_SECURE=true
 APP_ORIGIN=https://console.olivinha.site
