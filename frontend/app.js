@@ -8,7 +8,7 @@ const DEFAULT_EXECUTION_OPTIONS = {
 const DEFAULT_EXECUTION_PAYLOAD = {
     sheet: {
         enabled: true,
-        tabName: 'Homologacao'
+        tabName: 'Homologação'
     },
     artifacts: {
         csvEnabled: false
