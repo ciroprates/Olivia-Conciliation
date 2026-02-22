@@ -97,13 +97,13 @@ jobs:
             --arg nginx_conf_b64 "$NGINX_CONF_B64" \
             --arg setup_ssl_b64 "$SETUP_SSL_B64" \
             --arg gcp_key "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" \
-            --arg spreadsheet_id "${{ secrets.SPREADSHEET_ID }}" \
+            --arg sheet_spreadsheet_id "${{ secrets.SHEET_SPREADSHEET_ID }}" \
             --arg pluggy_client_id "${{ secrets.PLUGGY_CLIENT_ID }}" \
             --arg pluggy_client_secret "${{ secrets.PLUGGY_CLIENT_SECRET }}" \
             --arg admin_user "${{ secrets.ADMIN_USER }}" \
             --arg admin_pass "${{ secrets.ADMIN_PASS }}" \
             --arg jwt_secret "${{ secrets.JWT_SECRET }}" \
-            --arg banks_json "${{ secrets.BANKS_JSON }}" \
+            --arg banks "${{ secrets.BANKS }}" \
             '{
               commands: [
                 "mkdir -p \($app_dir)/scripts \($app_dir)/nginx",
@@ -117,13 +117,13 @@ jobs:
                 "export ECR_REGISTRY=\($ecr_registry | @sh)",
                 "export ECR_REPOSITORY=\($ecr_repository | @sh)",
                 "export GCP_SERVICE_ACCOUNT_KEY=\($gcp_key | @sh)",
-                "export SPREADSHEET_ID=\($spreadsheet_id | @sh)",
+                "export SHEET_SPREADSHEET_ID=\($sheet_spreadsheet_id | @sh)",
                 "export PLUGGY_CLIENT_ID=\($pluggy_client_id | @sh)",
                 "export PLUGGY_CLIENT_SECRET=\($pluggy_client_secret | @sh)",
                 "export ADMIN_USER=\($admin_user | @sh)",
                 "export ADMIN_PASS=\($admin_pass | @sh)",
                 "export JWT_SECRET=\($jwt_secret | @sh)",
-                "export BANKS_JSON=\($banks_json | @sh)",
+                "export BANKS=\($banks | @sh)",
                 "\($app_dir)/scripts/deploy-ec2.sh"
               ]
             }')

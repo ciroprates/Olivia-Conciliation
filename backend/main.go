@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 
 	"olivia-conciliation/backend/handlers"
@@ -20,11 +21,23 @@ func main() {
 		log.Printf("warning: failed to load .env: %v", err)
 	}
 
-	// Env vars checks
-	spreadsheetID := os.Getenv("SPREADSHEET_ID")
-	if spreadsheetID == "" {
-		log.Fatal("SPREADSHEET_ID not set")
+	requiredEnvVars := []string{
+		"SHEET_SPREADSHEET_ID",
+		"ADMIN_USER",
+		"ADMIN_PASS",
+		"JWT_SECRET",
+		"SHEET_ES",
+		"SHEET_DIF",
+		"SHEET_REJ",
 	}
+
+	missingEnvVars := collectMissingEnvVars(requiredEnvVars)
+	if len(missingEnvVars) > 0 {
+		log.Printf("missing or empty required env vars: %s", strings.Join(missingEnvVars, ", "))
+		log.Fatal("startup aborted due to missing required env vars")
+	}
+
+	spreadsheetID := os.Getenv("SHEET_SPREADSHEET_ID")
 
 	// Init Sheets Client
 	client, err := sheets.NewClient(context.Background(), spreadsheetID)
@@ -77,4 +90,24 @@ func main() {
 
 	log.Printf("Server listening on port %s", port)
 	log.Fatal(http.ListenAndServe(":"+port, mux))
+}
+
+func collectMissingEnvVars(names []string) []string {
+	missing := make([]string, 0)
+	seen := make(map[string]struct{}, len(names))
+
+	for _, name := range names {
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+
+		value, exists := os.LookupEnv(name)
+		if !exists || strings.TrimSpace(value) == "" {
+			missing = append(missing, name)
+		}
+	}
+
+	slices.Sort(missing)
+	return missing
 }

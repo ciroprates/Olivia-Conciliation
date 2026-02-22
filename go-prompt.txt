@@ -218,7 +218,7 @@ Configuração via env vars:
 GOOGLE_APPLICATION_CREDENTIALS
 
 
-SPREADSHEET_ID
+SHEET_SPREADSHEET_ID
 
 
 nomes das abas (ES/DIF/REJ)
@@ -237,4 +237,3 @@ Exemplos de respostas JSON para cada endpoint
 
 
 Passo a passo de configuração (credenciais, permissões, execução local)
-

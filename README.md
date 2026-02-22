@@ -4,166 +4,171 @@
 [![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED?style=flat&logo=docker)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Sistema inteligente de conciliação financeira automatizada entre **Google Sheets** e **Pluggy API**. Gerencie transações, identifique parcelas e automatize fluxos de auditoria com segurança e alta performance.
+Sistema de conciliação financeira entre Google Sheets e Pluggy API.
 
----
+## Visão Geral
 
-A aplicação utiliza uma arquitetura de microservices orquestrada por Docker, protegida por um Proxy Reverso Nginx com suporte a HTTPS (Let's Encrypt) e autenticação por **cookie de sessão HttpOnly (JWT)** com proteção CSRF.
+- `backend` (Go): autenticação, leitura/escrita em planilhas e regras de conciliação.
+- `frontend` (Vanilla JS): interface operacional.
+- `nginx`: proxy reverso, roteamento e camada de borda.
+- `olivia-api`: serviço externo consumido via imagem no ECR.
 
----
+## 🚀 Execução
 
-## 🚀 Como Executar
+### 1. Docker (recomendado)
 
-### 🐳 Via Docker (Recomendado)
+```bash
+cp .env.example .env
+# preencha os valores necessários
+docker compose up -d
+```
 
-Modo indicado para simular o ambiente de produção com Nginx, SSL e roteamento por domínio.
+Pré-requisitos deste modo:
+- Certificados já presentes em `certbot/conf`.
+- Imagem `olivia-api` disponível no registry definido por `ECR_REGISTRY`/`ECR_REPOSITORY`.
 
-1.  **Configuração Inicial**:
-    ```bash
-    cp .env.example .env
-    # Preencha as credenciais no arquivo .env
-    ```
+### 2. Desenvolvimento local (sem Docker)
 
-2.  **Deploy**:
-    ```bash
-    docker compose up -d
-    ```
+1. Crie o `.env`:
+```bash
+cp .env.example .env
+```
 
-> [!IMPORTANT]
-> Este modo assume:
-> - Certificados já existentes em `certbot/conf` (usados pelo `nginx`).
-> - Imagem `olivia-api` disponível no registry configurado em `ECR_REGISTRY`.
->
-> O deploy via GitHub Actions não executa bootstrap/renovação de SSL. A gestão do certificado é manual na EC2 via `scripts/setup-ssl.sh`.
+2. Ajuste ao menos estas variáveis para local:
+```dotenv
+GOOGLE_APPLICATION_CREDENTIALS=/caminho/para/key.json
+SHEET_SPREADSHEET_ID=seu_id
+ADMIN_USER=admin
+ADMIN_PASS=sua_senha
+JWT_SECRET=seu_jwt_secret
+APP_ORIGIN=http://localhost:3001
+COOKIE_SECURE=false
+COOKIE_DOMAIN=
+```
 
-### 💻 Desenvolvimento Local (Sem Docker)
+3. Suba o backend:
+```bash
+go run backend/main.go
+```
 
-Para testar mudanças rapidamente sem subir toda a infraestrutura:
+4. No `frontend/app.js`, use URLs diretas no modo local:
+```js
+const API_URL = 'http://localhost:8080/api';
+const EXECUTION_API_URL = 'http://localhost:3000/v1/executions';
+```
 
-1.  **Crie o arquivo de ambiente**:
-    ```bash
-    cp .env.example .env
-    ```
+5. Suba frontend estático:
+```bash
+cd frontend
+python3 -m http.server 3001
+```
 
-2.  **Ajuste variáveis no `.env` para ambiente local**:
-    ```dotenv
-    # já existentes
-    GOOGLE_APPLICATION_CREDENTIALS=/caminho/absoluto/para/sua-chave.json
-    SPREADSHEET_ID=seu_id_da_planilha
-    ADMIN_USER=admin
-    ADMIN_PASS=sua_senha
-    JWT_SECRET=seu_jwt_secret
+Observação: sem Nginx, rotas relativas (`/api`, `/executions`) não funcionam.
 
-    # adicionar para dev local
-    APP_ORIGIN=http://localhost:3001
-    COOKIE_SECURE=false
-    COOKIE_DOMAIN=
-    ```
+### 3. Simular produção local com Nginx
 
-3.  **Backend (Go)**:
-    ```bash
-    go run backend/main.go
-    # O backend subirá em http://localhost:8080
-    ```
+Adicione no hosts:
 
-4.  **Frontend (Vanilla JS)**:
-    Edite `frontend/app.js` para apontar para o backend local sem proxy:
-    ```js
-    const API_URL = 'http://localhost:8080/api';
-    // opcional: se não estiver rodando olivia-api local, mantenha apenas a conciliação manual
-    const EXECUTION_API_URL = 'http://localhost:3000/v1/executions';
-    ```
+```text
+127.0.0.1 console.olivinha.site bff.olivinha.site api.olivinha.site n8n.olivinha.site waha.olivinha.site
+```
 
-5.  **Suba o frontend estático**:
-    ```bash
-    cd frontend
-    python3 -m http.server 3001
-    # Acesse http://localhost:3001
-    ```
+Depois execute `docker compose up -d`.
 
-> [!NOTE]
-> No modo sem Docker, as rotas relativas `/api` e `/executions` nao funcionam sem o proxy Nginx.
-
-### 🛠️ Simulando Produção Localmente (Com Docker)
-
-Para testar o roteamento do Nginx no seu computador:
-1.  Edite seu arquivo de hosts (`/etc/hosts` no Linux ou `C:\Windows\System32\drivers\etc\hosts` no Windows).
-2.  Adicione o mapeamento:
-    ```text
-    127.0.0.1 console.olivinha.site bff.olivinha.site api.olivinha.site n8n.olivinha.site waha.olivinha.site
-    ```
-3.  Suba os containers: `docker compose up -d`.
-
-### 🌍 URLs de Acesso
+## 🌍 URLs
 
 | Serviço | URL |
 | :--- | :--- |
-| **Aplicação Principal** | [https://console.olivinha.site](https://console.olivinha.site) |
-| **Automação n8n** | [https://n8n.olivinha.site](https://n8n.olivinha.site) |
-| **WhatsApp API** | [https://waha.olivinha.site](https://waha.olivinha.site) |
+| Console | https://console.olivinha.site |
+| n8n | https://n8n.olivinha.site |
+| WhatsApp API | https://waha.olivinha.site |
 
----
+## 🧩 Variáveis de Ambiente
 
-## 🛠️ Configuração de CI/CD
+### `.env` local (base: `.env.example`)
 
-O projeto utiliza **GitHub Actions** com **AWS Systems Manager (SSM)** para deploys automáticos e seguros, sem necessidade de chaves SSH expostas.
+| Variável | Obrigatória? | Exemplo | Descrição |
+| :--- | :--- | :--- | :--- |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Sim | `key.json` | Caminho do arquivo de credencial GCP no host. |
+| `SHEET_SPREADSHEET_ID` | Sim | `1AbCdEfGhIj...` | ID da planilha principal. |
+| `PLUGGY_CLIENT_ID` | Sim (se usar `olivia-api`) | `plg_abc123` | Client ID da Pluggy. |
+| `PLUGGY_CLIENT_SECRET` | Sim (se usar `olivia-api`) | `plg_secret_xyz` | Client Secret da Pluggy. |
+| `ADMIN_USER` | Sim | `admin` | Usuário do login. |
+| `ADMIN_PASS` | Sim | `senha_forte` | Senha do login. |
+| `JWT_SECRET` | Sim | `segredo_super_secreto` | Segredo de assinatura JWT. |
+| `BANKS` | Não | `item-id-1,item-id-2` | Lista CSV de item IDs da Pluggy usada quando `payload.banks` não é enviado. |
+| `APP_ORIGIN` | Recomendável | `http://localhost:3001` | Origem validada para CSRF. |
+| `COOKIE_SECURE` | Recomendável | `false` | Flag `Secure` do cookie. |
+| `COOKIE_DOMAIN` | Opcional | `` | Domínio do cookie. |
+| `PORT` | Opcional | `8080` | Porta HTTP do backend (padrão `8080`). |
+| `SHEET_ES` | Opcional | `Entradas e Saídas` | Nome da aba ES. |
+| `SHEET_DIF` | Opcional | `Diferença` | Nome da aba DIF. |
+| `SHEET_REJ` | Opcional | `Rejeitados` | Nome da aba de rejeitados. |
+| `ECR_REGISTRY` | Obrigatória em Docker/CI | `683684736241.dkr.ecr.us-east-1.amazonaws.com` | Registry ECR das imagens. |
+| `ECR_REPOSITORY` | Obrigatória em Docker/CI | `olivia-conciliation` | Repositório ECR das imagens. |
 
-### 🔐 Secrets & Variables Necessárias
+### Variáveis que o pipeline copia para o `.env` (produção)
 
-> [!IMPORTANT]
-> Configure estas variáveis nas configurações do repositório GitHub para o pipeline `ecr-push.yml`.
+Fonte: `scripts/deploy-ec2.sh` (`cat > .env <<EOF`).
+
+| Variável | Preenchimento obrigatório? | Exemplo | Descrição |
+| :--- | :--- | :--- | :--- |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Não (gerada automaticamente) | `/home/ubuntu/olivia-installments-conciliation/key.json` | Caminho da chave GCP criada no deploy. |
+| `SHEET_SPREADSHEET_ID` | Sim (`secrets.SHEET_SPREADSHEET_ID`) | `1AbCdEfGhIj...` | ID da planilha principal. |
+| `ECR_REGISTRY` | Sim (`vars.ECR_REGISTRY`) | `683684736241.dkr.ecr.us-east-1.amazonaws.com` | Registry para `docker compose pull`. |
+| `ECR_REPOSITORY` | Sim (`vars.ECR_REPOSITORY`) | `olivia-conciliation` | Repositório de imagens. |
+| `PLUGGY_CLIENT_ID` | Sim (`secrets.PLUGGY_CLIENT_ID`) | `plg_abc123` | Credencial Pluggy. |
+| `PLUGGY_CLIENT_SECRET` | Sim (`secrets.PLUGGY_CLIENT_SECRET`) | `plg_secret_xyz` | Credencial Pluggy. |
+| `PORT` | Não (fixa no script) | `8080` | Porta do backend. |
+| `SHEET_ES` | Não (fixa no script) | `Entradas e Saídas` | Aba ES no Google Sheets. |
+| `SHEET_DIF` | Não (fixa no script) | `Diferença` | Aba DIF no Google Sheets. |
+| `SHEET_REJ` | Não (fixa no script) | `Rejeitados` | Aba de rejeitados. |
+| `ADMIN_USER` | Sim (`secrets.ADMIN_USER`) | `admin` | Usuário de autenticação. |
+| `ADMIN_PASS` | Sim (`secrets.ADMIN_PASS`) | `senha_forte` | Senha de autenticação. |
+| `JWT_SECRET` | Sim (`secrets.JWT_SECRET`) | `segredo_super_secreto` | Chave de assinatura JWT. |
+| `BANKS` | Não | `item-id-1,item-id-2` | Lista CSV de item IDs da Pluggy usada quando `payload.banks` não é enviado. |
+| `COOKIE_DOMAIN` | Não (fixa no script) | `console.olivinha.site` | Domínio de cookie em produção. |
+| `COOKIE_SECURE` | Não (fixa no script) | `true` | Cookie com `Secure=true` em produção. |
+| `APP_ORIGIN` | Não (fixa no script) | `https://console.olivinha.site` | Origem permitida para CSRF. |
+
+## 🛠️ CI/CD (GitHub Actions)
+
+Workflow: `.github/workflows/ecr-push.yml`
+
+### Variáveis obrigatórias no GitHub
 
 | Tipo | Chaves |
 | :--- | :--- |
-| **Secrets** | `GCP_SERVICE_ACCOUNT_KEY`, `SPREADSHEET_ID`, `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `ADMIN_USER`, `ADMIN_PASS`, `JWT_SECRET`, `BANKS_JSON` |
-| **Variables** | `AWS_REGION`, `ECR_REGISTRY`, `ECR_REPOSITORY`, `AWS_ROLE_BUILD_ARN`, `AWS_ROLE_DEPLOY_ARN`, `APP_DIR`, `DEPLOY_TAG_KEY`, `DEPLOY_TAG_VALUE` |
+| `secrets` | `GCP_SERVICE_ACCOUNT_KEY`, `SHEET_SPREADSHEET_ID`, `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `ADMIN_USER`, `ADMIN_PASS`, `JWT_SECRET`, `BANKS` |
+| `vars` | `AWS_REGION`, `ECR_REGISTRY`, `ECR_REPOSITORY`, `AWS_ROLE_BUILD_ARN`, `AWS_ROLE_DEPLOY_ARN`, `APP_DIR`, `DEPLOY_TAG_KEY`, `DEPLOY_TAG_VALUE` |
 
-#### Novo secret: `BANKS_JSON`
+### Fluxo de deploy
 
-Use este secret para enviar a lista de bancos permitidos para o `olivia-api` sem expor IDs no frontend.
+1. Workflow faz build/push das imagens no ECR.
+2. Workflow envia arquivos e variáveis via AWS SSM.
+3. `scripts/deploy-ec2.sh` na EC2 gera `key.json` e `.env`.
+4. `docker compose pull && docker compose up -d` aplica o deploy.
 
-- Formato: JSON array em uma linha.
-- Exemplo:
-  ```json
-  ["1dc87ce3-58d5-4178-a309-f6a9d9848e21","cf1c1196-d723-4049-951e-3fb64767b181","1418158d-30c1-4ad3-8cc6-0de640bc5cf5"]
-  ```
-- Fluxo:
-  - O GitHub Actions exporta `BANKS_JSON` durante o deploy.
-  - O `scripts/deploy-ec2.sh` grava essa variável no `.env`.
-  - O container `olivia-api` recebe `BANKS_JSON` via `env_file` no `docker-compose.yml`.
+### SSL (manual na EC2)
 
-### 🔒 SSL Manual na EC2
+```bash
+cd $APP_DIR
+chmod +x scripts/setup-ssl.sh
+sudo ./scripts/setup-ssl.sh
+```
 
-O pipeline executa apenas deploy da aplicação. O SSL deve ser executado manualmente na EC2:
+O certificado inicial cobre `console`, `n8n` e `waha` em `olivinha.site`.
 
-1. `cd $APP_DIR`
-2. `chmod +x scripts/setup-ssl.sh`
-3. `sudo ./scripts/setup-ssl.sh`
+## 🔒 Segurança
 
-
-> [!IMPORTANT]
-> O certificado inicial é emitido para os subdomínios `console`, `n8n` e `waha` em `olivinha.site` (não inclui o domínio raiz `olivinha.site`).
-> Garanta DNS válido para esses subdomínios e acesso público à porta `80/TCP` para o desafio HTTP-01.
-
-### 👤 Roles IAM (OIDC) Esperadas
-
-1. `AWS_ROLE_BUILD_ARN`: role usada no job de build/push para autenticar no ECR.
-2. `AWS_ROLE_DEPLOY_ARN`: role usada no job de deploy para executar `ec2:DescribeInstances` e comandos via SSM.
-
----
-
-## 🛡️ Segurança
-
-*   **Proxy Reverso**: Todos os serviços rodam em rede interna Docker, acessíveis apenas via Nginx.
-*   **Sessão HttpOnly + CSRF**: JWT em cookie `HttpOnly` validado na borda pelo Nginx (`auth_request`) e token CSRF para métodos mutáveis.
-*   **SSL/TLS**: Criptografia de ponta a ponta via Let's Encrypt.
-*   **Infrastructure Hardening**: As portas de gerência (SSH) são fechadas para a internet, utilizando o **AWS SSM Session Manager** para acesso administrativo.
-
----
+- Serviços internos expostos apenas via Nginx.
+- JWT em cookie `HttpOnly` + proteção CSRF.
+- TLS com Let's Encrypt.
+- Acesso operacional via AWS SSM Session Manager.
 
 ## Funcionalidades
 
-1. **Fila de Conciliações**: Exibe transações que aguardam pareamento manual.
-2. **Algoritmo de Sugestão**: Cruza dados de valor e data para sugerir melhores candidatas.
-3. **Fluxo de Aprovação**: Ao aceitar, o sistema escreve o ID de conciliação diretamente na planilha bancária.
-4. **Gestão de Rejeitados**: Transações sem par podem ser movidas para uma aba de auditoria.
+1. Fila de conciliações pendentes.
+2. Sugestão automática de correspondência por valor/data.
+3. Aprovação com escrita direta na planilha.
+4. Gestão de rejeitados para auditoria.

@@ -5,6 +5,16 @@ const DEFAULT_EXECUTION_OPTIONS = {
     excludeCategories: ['Same person transfer', 'Credit card payment'],
     startDate: '2026-01-15'
 };
+const DEFAULT_EXECUTION_PAYLOAD = {
+    sheet: {
+        enabled: true,
+        tabName: 'Homologacao'
+    },
+    artifacts: {
+        csvEnabled: false
+    },
+    banks: []
+};
 
 const app = {
     state: {
@@ -562,7 +572,10 @@ const app = {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    options: this.state.executionOptions
+                    options: this.state.executionOptions,
+                    sheet: DEFAULT_EXECUTION_PAYLOAD.sheet,
+                    artifacts: DEFAULT_EXECUTION_PAYLOAD.artifacts,
+                    banks: DEFAULT_EXECUTION_PAYLOAD.banks
                 })
             });
             const payload = await this.parseResponseSafely(res);

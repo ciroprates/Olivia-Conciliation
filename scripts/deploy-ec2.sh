@@ -5,7 +5,7 @@ set -e
 # Ele espera que as seguintes variáveis de ambiente estejam definidas:
 # - APP_DIR
 # - GCP_SERVICE_ACCOUNT_KEY (Base64)
-# - SPREADSHEET_ID
+# - SHEET_SPREADSHEET_ID
 # - AWS_REGION
 # - ECR_REGISTRY
 # - PLUGGY_CLIENT_ID
@@ -29,17 +29,13 @@ chmod 644 key.json
 # 3. Cria o arquivo .env
 echo "Criando arquivo .env..."
 
-# BANKS_JSON pode vir formatado em múltiplas linhas (ex.: JSON pretty-printed)
-# e quebrar o parse do docker compose. Compactamos para uma linha.
-if command -v jq >/dev/null 2>&1; then
-    BANKS_JSON_COMPACT=$(printf '%s' "$BANKS_JSON" | jq -c . 2>/dev/null || printf '%s' "$BANKS_JSON" | tr -d '\r\n')
-else
-    BANKS_JSON_COMPACT=$(printf '%s' "$BANKS_JSON" | tr -d '\r\n')
-fi
+# BANKS é uma lista CSV de item IDs.
+# Removemos quebras de linha/espaços para manter o valor estável no .env.
+BANKS_CLEAN=$(printf '%s' "$BANKS" | tr -d '\r\n ')
 
 cat > .env <<EOF
 GOOGLE_APPLICATION_CREDENTIALS=$APP_DIR/key.json
-SPREADSHEET_ID=$SPREADSHEET_ID
+SHEET_SPREADSHEET_ID=$SHEET_SPREADSHEET_ID
 ECR_REGISTRY=$ECR_REGISTRY
 ECR_REPOSITORY=$ECR_REPOSITORY
 PLUGGY_CLIENT_ID=$PLUGGY_CLIENT_ID
@@ -51,7 +47,7 @@ SHEET_REJ=Rejeitados
 ADMIN_USER=$ADMIN_USER
 ADMIN_PASS=$ADMIN_PASS
 JWT_SECRET=$JWT_SECRET
-BANKS_JSON=$BANKS_JSON_COMPACT
+BANKS=$BANKS_CLEAN
 COOKIE_DOMAIN=console.olivinha.site
 COOKIE_SECURE=true
 APP_ORIGIN=https://console.olivinha.site
