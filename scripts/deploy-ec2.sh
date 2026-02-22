@@ -64,6 +64,10 @@ echo "Puxando novas imagens e reiniciando containers..."
 sudo docker compose pull
 sudo docker compose up -d
 
+# 5.1 Recarrega o Nginx para atualizar resolução de upstreams após recriação de containers
+echo "Recarregando Nginx..."
+sudo docker compose exec -T nginx nginx -s reload || sudo docker compose restart nginx
+
 # 6. Limpeza
 echo "Limpando imagens antigas..."
 sudo docker image prune -f
