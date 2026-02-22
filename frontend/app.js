@@ -482,6 +482,10 @@ const app = {
             </div>
             ${!compact ? `
             <div class="data-row">
+                <span class="label">Banco</span>
+                <span>${item.banco || '-'}</span>
+            </div>
+            <div class="data-row">
                 <span class="label">Conta</span>
                 <span>${item.conta}</span>
             </div>

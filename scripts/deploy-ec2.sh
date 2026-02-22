@@ -29,9 +29,8 @@ chmod 644 key.json
 # 3. Cria o arquivo .env
 echo "Criando arquivo .env..."
 
-# BANKS é uma lista CSV de item IDs.
-# Removemos quebras de linha/espaços para manter o valor estável no .env.
-BANKS_CLEAN=$(printf '%s' "$BANKS" | tr -d '\r\n ')
+# BANKS_JSON: lista JSON de bancos/owners.
+BANKS_JSON_CLEAN=$(printf '%s' "$BANKS_JSON" | tr -d '\r\n')
 
 cat > .env <<EOF
 GOOGLE_APPLICATION_CREDENTIALS=$APP_DIR/key.json
@@ -47,7 +46,7 @@ SHEET_REJ=Rejeitados
 ADMIN_USER=$ADMIN_USER
 ADMIN_PASS=$ADMIN_PASS
 JWT_SECRET=$JWT_SECRET
-BANKS=$BANKS_CLEAN
+BANKS_JSON=$BANKS_JSON_CLEAN
 COOKIE_DOMAIN=console.olivinha.site
 COOKIE_SECURE=true
 APP_ORIGIN=https://console.olivinha.site

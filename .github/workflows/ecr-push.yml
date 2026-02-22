@@ -103,7 +103,7 @@ jobs:
             --arg admin_user "${{ secrets.ADMIN_USER }}" \
             --arg admin_pass "${{ secrets.ADMIN_PASS }}" \
             --arg jwt_secret "${{ secrets.JWT_SECRET }}" \
-            --arg banks "${{ secrets.BANKS }}" \
+            --arg banks_json "${{ secrets.BANKS_JSON }}" \
             '{
               commands: [
                 "mkdir -p \($app_dir)/scripts \($app_dir)/nginx",
@@ -123,7 +123,7 @@ jobs:
                 "export ADMIN_USER=\($admin_user | @sh)",
                 "export ADMIN_PASS=\($admin_pass | @sh)",
                 "export JWT_SECRET=\($jwt_secret | @sh)",
-                "export BANKS=\($banks | @sh)",
+                "export BANKS_JSON=\($banks_json | @sh)",
                 "\($app_dir)/scripts/deploy-ec2.sh"
               ]
             }')

@@ -96,7 +96,7 @@ Depois execute `docker compose up -d`.
 | `ADMIN_USER` | Sim | `admin` | Usuário do login. |
 | `ADMIN_PASS` | Sim | `senha_forte` | Senha do login. |
 | `JWT_SECRET` | Sim | `segredo_super_secreto` | Segredo de assinatura JWT. |
-| `BANKS` | Não | `item-id-1,item-id-2` | Lista CSV de item IDs da Pluggy usada quando `payload.banks` não é enviado. |
+| `BANKS_JSON` | Não | `[{"id":"...","name":"Nubank","owner":"Ciro"}]` | Lista JSON de bancos por owner usada na configuração de execução. |
 | `APP_ORIGIN` | Recomendável | `http://localhost:3001` | Origem validada para CSRF. |
 | `COOKIE_SECURE` | Recomendável | `false` | Flag `Secure` do cookie. |
 | `COOKIE_DOMAIN` | Opcional | `` | Domínio do cookie. |
@@ -126,7 +126,7 @@ Fonte: `scripts/deploy-ec2.sh` (`cat > .env <<EOF`).
 | `ADMIN_USER` | Sim (`secrets.ADMIN_USER`) | `admin` | Usuário de autenticação. |
 | `ADMIN_PASS` | Sim (`secrets.ADMIN_PASS`) | `senha_forte` | Senha de autenticação. |
 | `JWT_SECRET` | Sim (`secrets.JWT_SECRET`) | `segredo_super_secreto` | Chave de assinatura JWT. |
-| `BANKS` | Não | `item-id-1,item-id-2` | Lista CSV de item IDs da Pluggy usada quando `payload.banks` não é enviado. |
+| `BANKS_JSON` | Não (`secrets.BANKS_JSON`) | `[{"id":"...","name":"Nubank","owner":"Ciro"}]` | Lista JSON de bancos por owner injetada no `.env` de produção. |
 | `COOKIE_DOMAIN` | Não (fixa no script) | `console.olivinha.site` | Domínio de cookie em produção. |
 | `COOKIE_SECURE` | Não (fixa no script) | `true` | Cookie com `Secure=true` em produção. |
 | `APP_ORIGIN` | Não (fixa no script) | `https://console.olivinha.site` | Origem permitida para CSRF. |
@@ -139,7 +139,7 @@ Workflow: `.github/workflows/ecr-push.yml`
 
 | Tipo | Chaves |
 | :--- | :--- |
-| `secrets` | `GCP_SERVICE_ACCOUNT_KEY`, `SHEET_SPREADSHEET_ID`, `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `ADMIN_USER`, `ADMIN_PASS`, `JWT_SECRET`, `BANKS` |
+| `secrets` | `GCP_SERVICE_ACCOUNT_KEY`, `SHEET_SPREADSHEET_ID`, `PLUGGY_CLIENT_ID`, `PLUGGY_CLIENT_SECRET`, `ADMIN_USER`, `ADMIN_PASS`, `JWT_SECRET`, `BANKS_JSON` |
 | `vars` | `AWS_REGION`, `ECR_REGISTRY`, `ECR_REPOSITORY`, `AWS_ROLE_BUILD_ARN`, `AWS_ROLE_DEPLOY_ARN`, `APP_DIR`, `DEPLOY_TAG_KEY`, `DEPLOY_TAG_VALUE` |
 
 ### Fluxo de deploy
