@@ -64,6 +64,19 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Deploy to EC2 via SSM
+        env:
+          APP_DIR_ENV: ${{ env.APP_DIR }}
+          AWS_REGION_ENV: ${{ env.AWS_REGION }}
+          ECR_REGISTRY_ENV: ${{ env.ECR_REGISTRY }}
+          ECR_REPOSITORY_ENV: ${{ env.ECR_REPOSITORY }}
+          GCP_SERVICE_ACCOUNT_KEY_ENV: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          SHEET_SPREADSHEET_ID_ENV: ${{ secrets.SHEET_SPREADSHEET_ID }}
+          PLUGGY_CLIENT_ID_ENV: ${{ secrets.PLUGGY_CLIENT_ID }}
+          PLUGGY_CLIENT_SECRET_ENV: ${{ secrets.PLUGGY_CLIENT_SECRET }}
+          ADMIN_USER_ENV: ${{ secrets.ADMIN_USER }}
+          ADMIN_PASS_ENV: ${{ secrets.ADMIN_PASS }}
+          JWT_SECRET_ENV: ${{ secrets.JWT_SECRET }}
+          BANKS_JSON_ENV: ${{ secrets.BANKS_JSON }}
         run: |
           # Encode files to base64 to pass them easily via SSM
           DOCKER_COMPOSE_B64=$(base64 -w 0 docker-compose.yml)
@@ -88,22 +101,22 @@ jobs:
           echo "Iniciando deploy via SSM na instância $INSTANCE_ID..."
 
           SSM_PARAMETERS=$(jq -cn \
-            --arg app_dir "${{ env.APP_DIR }}" \
-            --arg aws_region "${{ env.AWS_REGION }}" \
-            --arg ecr_registry "${{ env.ECR_REGISTRY }}" \
-            --arg ecr_repository "${{ env.ECR_REPOSITORY }}" \
+            --arg app_dir "$APP_DIR_ENV" \
+            --arg aws_region "$AWS_REGION_ENV" \
+            --arg ecr_registry "$ECR_REGISTRY_ENV" \
+            --arg ecr_repository "$ECR_REPOSITORY_ENV" \
             --arg docker_compose_b64 "$DOCKER_COMPOSE_B64" \
             --arg deploy_script_b64 "$DEPLOY_SCRIPT_B64" \
             --arg nginx_conf_b64 "$NGINX_CONF_B64" \
             --arg setup_ssl_b64 "$SETUP_SSL_B64" \
-            --arg gcp_key "${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}" \
-            --arg sheet_spreadsheet_id "${{ secrets.SHEET_SPREADSHEET_ID }}" \
-            --arg pluggy_client_id "${{ secrets.PLUGGY_CLIENT_ID }}" \
-            --arg pluggy_client_secret "${{ secrets.PLUGGY_CLIENT_SECRET }}" \
-            --arg admin_user "${{ secrets.ADMIN_USER }}" \
-            --arg admin_pass "${{ secrets.ADMIN_PASS }}" \
-            --arg jwt_secret "${{ secrets.JWT_SECRET }}" \
-            --arg banks_json "${{ secrets.BANKS_JSON }}" \
+            --arg gcp_key "$GCP_SERVICE_ACCOUNT_KEY_ENV" \
+            --arg sheet_spreadsheet_id "$SHEET_SPREADSHEET_ID_ENV" \
+            --arg pluggy_client_id "$PLUGGY_CLIENT_ID_ENV" \
+            --arg pluggy_client_secret "$PLUGGY_CLIENT_SECRET_ENV" \
+            --arg admin_user "$ADMIN_USER_ENV" \
+            --arg admin_pass "$ADMIN_PASS_ENV" \
+            --arg jwt_secret "$JWT_SECRET_ENV" \
+            --arg banks_json "$BANKS_JSON_ENV" \
             '{
               commands: [
                 "mkdir -p \($app_dir)/scripts \($app_dir)/nginx",
