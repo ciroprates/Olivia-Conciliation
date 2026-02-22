@@ -20,6 +20,10 @@ services:
     image: ${ECR_REGISTRY}/olivia-api:latest
     env_file:
       - .env
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /app/olivia-service-account-key.json
+    volumes:
+      - ${GOOGLE_APPLICATION_CREDENTIALS}:/app/olivia-service-account-key.json:ro
 
   # --- Serviços n8n & Automação ---
   nginx:
