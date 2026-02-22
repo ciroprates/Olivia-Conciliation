@@ -12,8 +12,7 @@ const DEFAULT_EXECUTION_PAYLOAD = {
     },
     artifacts: {
         csvEnabled: false
-    },
-    banks: []
+    }
 };
 
 const app = {
