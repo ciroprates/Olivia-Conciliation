@@ -25,7 +25,9 @@ const app = {
         currentExecution: null,
         executionHistory: [],
         statusPollingInterval: null,
-        executionOptions: { ...DEFAULT_EXECUTION_OPTIONS }
+        executionOptions: { ...DEFAULT_EXECUTION_OPTIONS },
+        notificationTimeoutId: null,
+        notificationHideTimeoutId: null
     },
 
     async init() {
@@ -75,12 +77,44 @@ const app = {
         }
 
         if (payload?.raw) {
-            // Avoid showing a full HTML page in alerts.
+            // Avoid showing a full HTML page in notifications.
             const plain = payload.raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
             if (plain) return plain.slice(0, 200);
         }
 
         return fallback;
+    },
+
+    showNotification(message, type = 'success', duration = 4500) {
+        const notification = document.getElementById('app-notification');
+        if (!notification || !message) return;
+
+        notification.classList.remove('hidden', 'success', 'error', 'visible');
+        notification.textContent = message;
+        const isError = type === 'error';
+        notification.classList.add(isError ? 'error' : 'success');
+        notification.setAttribute('aria-live', isError ? 'assertive' : 'polite');
+
+        if (this.state.notificationTimeoutId) {
+            clearTimeout(this.state.notificationTimeoutId);
+        }
+        if (this.state.notificationHideTimeoutId) {
+            clearTimeout(this.state.notificationHideTimeoutId);
+            this.state.notificationHideTimeoutId = null;
+        }
+
+        requestAnimationFrame(() => {
+            notification.classList.add('visible');
+        });
+
+        this.state.notificationTimeoutId = setTimeout(() => {
+            notification.classList.remove('visible');
+            this.state.notificationHideTimeoutId = setTimeout(() => {
+                notification.classList.add('hidden');
+                this.state.notificationHideTimeoutId = null;
+            }, 220);
+            this.state.notificationTimeoutId = null;
+        }, duration);
     },
 
     getCookie(name) {
@@ -177,11 +211,11 @@ const app = {
                 this.state.authenticated = true;
                 this.navigate('queue');
             } else {
-                alert('Credenciais inválidas');
+                this.showNotification('Credenciais inválidas', 'error');
             }
         } catch (err) {
             console.error(err);
-            alert('Erro ao realizar login');
+            this.showNotification('Erro ao realizar login', 'error');
         }
     },
 
@@ -214,7 +248,7 @@ const app = {
         } catch (err) {
             console.error(err);
             if (err.message !== 'Sessão expirada. Faça login novamente.') {
-                alert('Erro ao carregar conciliações');
+                this.showNotification('Erro ao carregar conciliações', 'error');
             }
         }
     },
@@ -427,7 +461,7 @@ const app = {
             this.navigate('details');
         } catch (err) {
             console.error(err);
-            alert('Erro ao carregar detalhes');
+            this.showNotification('Erro ao carregar detalhes', 'error');
         }
     },
 
@@ -507,7 +541,7 @@ const app = {
 
     async acceptSelection() {
         if (this.state.selectedCandidates.size === 0) {
-            alert('Selecione pelo menos uma candidata.');
+            this.showNotification('Selecione pelo menos uma candidata.', 'error');
             return;
         }
 
@@ -522,15 +556,15 @@ const app = {
             });
 
             if (res.ok) {
-                alert('Conciliação realizada com sucesso!');
+                this.showNotification('Conciliação realizada com sucesso!', 'success');
                 this.navigate('queue');
             } else {
                 const txt = await res.text();
-                alert('Erro: ' + txt);
+                this.showNotification('Erro: ' + txt, 'error');
             }
         } catch (err) {
             console.error(err);
-            alert('Erro na requisição');
+            this.showNotification('Erro na requisição', 'error');
         }
     },
 
@@ -545,15 +579,15 @@ const app = {
             });
 
             if (res.ok) {
-                alert('Rejeitada com sucesso!');
+                this.showNotification('Rejeitada com sucesso!', 'success');
                 this.navigate('queue');
             } else {
                 const txt = await res.text();
-                alert('Erro: ' + txt);
+                this.showNotification('Erro: ' + txt, 'error');
             }
         } catch (err) {
             console.error(err);
-            alert('Erro na requisição');
+            this.showNotification('Erro na requisição', 'error');
         }
     },
 
@@ -593,11 +627,11 @@ const app = {
                 this.openStatusModal();
                 this.startStatusPolling(data.executionId);
             } else {
-                alert('Erro ao iniciar: ' + this.getErrorMessage(payload, `HTTP ${res.status}`));
+                this.showNotification('Erro ao iniciar: ' + this.getErrorMessage(payload, `HTTP ${res.status}`), 'error');
             }
         } catch (err) {
             console.error(err);
-            alert(err.message || 'Erro ao conectar com a API de Processamento');
+            this.showNotification(err.message || 'Erro ao conectar com a API de Processamento', 'error');
         }
     },
 
