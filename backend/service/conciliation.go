@@ -91,10 +91,25 @@ func rowToTransaction(idx int, row []interface{}, sheetName string) models.Trans
 	if len(row) > models.ColumnValor {
 		t.Valor = parseFloat(row[models.ColumnValor])
 	}
+	if len(row) > models.ColumnCategoria {
+		t.Categoria = fmt.Sprintf("%v", row[models.ColumnCategoria])
+	}
 	if len(row) > models.ColumnIdParcela {
 		t.IdParcela = fmt.Sprintf("%v", row[models.ColumnIdParcela])
 	}
 	return t
+}
+
+func isEmptyRow(row []interface{}) bool {
+	if len(row) == 0 {
+		return true
+	}
+	for _, cell := range row {
+		if strings.TrimSpace(fmt.Sprintf("%v", cell)) != "" {
+			return false
+		}
+	}
+	return true
 }
 
 func (l *Logic) GetConciliations() ([]models.PendingConciliationSummary, error) {
@@ -270,4 +285,137 @@ func (l *Logic) Reject(difIndex int) error {
 
 	// 3. Clear/Delete DIF Row
 	return l.client.ClearRow(os.Getenv("SHEET_DIF"), difIndex)
+}
+
+func (l *Logic) ListNonRecurringDIF() ([]models.NonRecurringDifSummary, error) {
+	difRows, err := l.client.FetchRows(os.Getenv("SHEET_DIF"))
+	if err != nil {
+		return nil, err
+	}
+
+	results := make([]models.NonRecurringDifSummary, 0)
+	for i := 1; i < len(difRows); i++ {
+		row := difRows[i]
+		if isEmptyRow(row) {
+			continue
+		}
+
+		dif := rowToTransaction(i, row, "DIF")
+		if dif.Recorrente {
+			continue
+		}
+
+		results = append(results, models.NonRecurringDifSummary{
+			DifRowIndex: dif.RowIndex,
+			Dono:        dif.Dono,
+			Banco:       dif.Banco,
+			Conta:       dif.Conta,
+			Descricao:   dif.Descricao,
+			Data:        dif.Data,
+			Valor:       dif.Valor,
+			Categoria:   dif.Categoria,
+			IdParcela:   dif.IdParcela,
+		})
+	}
+
+	return results, nil
+}
+
+func (l *Logic) MoveNonRecurringDifToES(difIndex int) error {
+	difRows, err := l.client.FetchRows(os.Getenv("SHEET_DIF"))
+	if err != nil {
+		return err
+	}
+	if difIndex >= len(difRows) {
+		return errors.New("index out of bounds")
+	}
+
+	rowContent := difRows[difIndex]
+	if isEmptyRow(rowContent) {
+		return errors.New("DIF row is empty")
+	}
+
+	dif := rowToTransaction(difIndex, rowContent, "DIF")
+	if dif.Recorrente {
+		return errors.New("DIF transaction is recurring")
+	}
+
+	if err := l.client.AppendRow(os.Getenv("SHEET_ES"), rowContent); err != nil {
+		return err
+	}
+
+	return l.client.ClearRow(os.Getenv("SHEET_DIF"), difIndex)
+}
+
+func (l *Logic) MoveNonRecurringDifToREJ(difIndex int) error {
+	difRows, err := l.client.FetchRows(os.Getenv("SHEET_DIF"))
+	if err != nil {
+		return err
+	}
+	if difIndex >= len(difRows) {
+		return errors.New("index out of bounds")
+	}
+
+	rowContent := difRows[difIndex]
+	if isEmptyRow(rowContent) {
+		return errors.New("DIF row is empty")
+	}
+
+	dif := rowToTransaction(difIndex, rowContent, "DIF")
+	if dif.Recorrente {
+		return errors.New("DIF transaction is recurring")
+	}
+
+	if err := l.client.AppendRow(os.Getenv("SHEET_REJ"), rowContent); err != nil {
+		return err
+	}
+
+	return l.client.ClearRow(os.Getenv("SHEET_DIF"), difIndex)
+}
+
+func (l *Logic) MoveAllNonRecurringDifToES() (*models.NonRecurringBulkActionResult, error) {
+	difRows, err := l.client.FetchRows(os.Getenv("SHEET_DIF"))
+	if err != nil {
+		return nil, err
+	}
+
+	moved := 0
+	for i := 1; i < len(difRows); i++ {
+		rowContent := difRows[i]
+		if isEmptyRow(rowContent) {
+			continue
+		}
+
+		dif := rowToTransaction(i, rowContent, "DIF")
+		if dif.Recorrente {
+			continue
+		}
+
+		if err := l.client.AppendRow(os.Getenv("SHEET_ES"), rowContent); err != nil {
+			return nil, err
+		}
+		if err := l.client.ClearRow(os.Getenv("SHEET_DIF"), i); err != nil {
+			return nil, err
+		}
+		moved++
+	}
+
+	return &models.NonRecurringBulkActionResult{MovedToES: moved}, nil
+}
+
+func (l *Logic) UpdateDifCategory(difIndex int, categoria string) error {
+	difRows, err := l.client.FetchRows(os.Getenv("SHEET_DIF"))
+	if err != nil {
+		return err
+	}
+	if difIndex >= len(difRows) {
+		return errors.New("index out of bounds")
+	}
+
+	rowContent := difRows[difIndex]
+	if isEmptyRow(rowContent) {
+		return errors.New("DIF row is empty")
+	}
+
+	return l.client.WriteCell(os.Getenv("SHEET_DIF"), difIndex, models.ColumnCategoria, categoria)
 }

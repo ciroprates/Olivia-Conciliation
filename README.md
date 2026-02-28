@@ -48,7 +48,14 @@ COOKIE_DOMAIN=
 
 3. Suba o backend:
 ```bash
-go run backend/main.go
+./scripts/go-local.sh run backend/main.go
+```
+
+Se o Go do sistema estiver inconsistente (erro de runtime com símbolos duplicados), use o toolchain local do repositório:
+```bash
+mkdir -p .toolchain
+tar -C .toolchain -xzf /tmp/go1.25.5.linux-amd64.tar.gz
+./scripts/go-local.sh version
 ```
 
 4. No `frontend/app.js`, use URLs diretas no modo local:

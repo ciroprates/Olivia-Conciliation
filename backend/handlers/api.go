@@ -123,3 +123,125 @@ func (h *Handler) RejectConciliation(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "rejected"})
 }
+
+func (h *Handler) ListNonRecurringDif(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	items, err := h.svc.ListNonRecurringDIF()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(items)
+}
+
+func (h *Handler) MoveNonRecurringDifToES(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 5 {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+
+	idStr := parts[len(parts)-2]
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.svc.MoveNonRecurringDifToES(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "moved_to_es"})
+}
+
+func (h *Handler) MoveNonRecurringDifToREJ(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 5 {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+
+	idStr := parts[len(parts)-2]
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.svc.MoveNonRecurringDifToREJ(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "moved_to_rej"})
+}
+
+func (h *Handler) MoveAllNonRecurringDifToES(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	result, err := h.svc.MoveAllNonRecurringDifToES()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+func (h *Handler) UpdateNonRecurringDifCategory(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 5 {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+
+	idStr := parts[len(parts)-2]
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	var req models.UpdateCategoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := h.svc.UpdateDifCategory(id, req.Categoria); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "category_updated"})
+}

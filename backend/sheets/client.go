@@ -73,7 +73,7 @@ func (c *Client) WriteCell(sheetName string, rowIndex int, colIndex int, value s
 }
 
 func (c *Client) AppendRow(sheetName string, values []interface{}) error {
-	rangeStr := fmt.Sprintf("%s!A:H", sheetName)
+	rangeStr := sheetName
 	val := &sheets.ValueRange{
 		Values: [][]interface{}{values},
 	}
@@ -92,7 +92,7 @@ func (c *Client) ClearRow(sheetName string, rowIndex int) error {
 	// Deleting dimensions shifts indices and requires obtaining the sheet ID; to keep behavior safe
 	// for current usage we clear the row contents instead of deleting the row.
 
-	rangeStr := fmt.Sprintf("%s!A%d:H%d", sheetName, rowIndex+1, rowIndex+1)
+	rangeStr := fmt.Sprintf("%s!A%d:ZZ%d", sheetName, rowIndex+1, rowIndex+1)
 	_, err := c.srv.Spreadsheets.Values.Clear(c.spreadsheetID, rangeStr, &sheets.ClearValuesRequest{}).Do()
 	return err
 }

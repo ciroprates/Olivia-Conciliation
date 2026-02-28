@@ -62,6 +62,8 @@ func main() {
 	// Protected Routes
 	protectedMux := http.NewServeMux()
 	protectedMux.HandleFunc("/api/conciliations", h.GetConciliations)
+	protectedMux.HandleFunc("/api/dif/non-recurring", h.ListNonRecurringDif)
+	protectedMux.HandleFunc("/api/dif/non-recurring/move-all-to-es", h.MoveAllNonRecurringDifToES)
 
 	protectedMux.HandleFunc("/api/conciliations/", func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path
@@ -75,6 +77,23 @@ func main() {
 		}
 		if r.Method == "GET" {
 			h.GetConciliationDetails(w, r)
+			return
+		}
+		http.NotFound(w, r)
+	})
+
+	protectedMux.HandleFunc("/api/dif/non-recurring/", func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if strings.HasSuffix(path, "/move-to-es") && r.Method == "POST" {
+			h.MoveNonRecurringDifToES(w, r)
+			return
+		}
+		if strings.HasSuffix(path, "/move-to-rej") && r.Method == "POST" {
+			h.MoveNonRecurringDifToREJ(w, r)
+			return
+		}
+		if strings.HasSuffix(path, "/category") && r.Method == "PATCH" {
+			h.UpdateNonRecurringDifCategory(w, r)
 			return
 		}
 		http.NotFound(w, r)

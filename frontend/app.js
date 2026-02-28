@@ -20,12 +20,14 @@ const app = {
         authenticated: false,
         currentView: 'queue',
         conciliations: [],
+        nonRecurringDif: [],
         details: null,
         selectedCandidates: new Set(),
         currentExecution: null,
         executionHistory: [],
         statusPollingInterval: null,
-        executionOptions: { ...DEFAULT_EXECUTION_OPTIONS }
+        executionOptions: { ...DEFAULT_EXECUTION_OPTIONS },
+        pendingCategoryEdits: {}
     },
 
     async init() {
@@ -152,6 +154,11 @@ const app = {
                     this.renderQueue(e.target.value);
                 });
             }
+
+            const copyAllBtn = document.getElementById('btn-copy-all-non-recurring');
+            if (copyAllBtn) {
+                copyAllBtn.addEventListener('click', () => this.copyAllNonRecurringToES());
+            }
         } else if (view === 'details') {
             const template = document.getElementById('view-details').content.cloneNode(true);
             main.innerHTML = '';
@@ -207,9 +214,16 @@ const app = {
 
     async loadQueue() {
         try {
-            const res = await this.authorizedFetch(`${API_URL}/conciliations`);
-            const data = await res.json();
-            this.state.conciliations = data || [];
+            const [conciliationsRes, nonRecurringRes] = await Promise.all([
+                this.authorizedFetch(`${API_URL}/conciliations`),
+                this.authorizedFetch(`${API_URL}/dif/non-recurring`)
+            ]);
+
+            const conciliations = await conciliationsRes.json();
+            const nonRecurring = await nonRecurringRes.json();
+            this.state.conciliations = conciliations || [];
+            this.state.nonRecurringDif = nonRecurring || [];
+            this.state.pendingCategoryEdits = {};
             this.renderQueue();
         } catch (err) {
             console.error(err);
@@ -259,6 +273,192 @@ const app = {
             el.onclick = () => this.loadDetails(item.difRowIndex);
             list.appendChild(el);
         });
+
+        this.renderNonRecurringList(search);
+    },
+
+    renderNonRecurringList(search = '') {
+        const panel = document.getElementById('non-recurring-panel');
+        const list = document.getElementById('non-recurring-list');
+        const count = document.getElementById('non-recurring-count');
+        const copyAllBtn = document.getElementById('btn-copy-all-non-recurring');
+        if (!panel || !list || !count || !copyAllBtn) return;
+
+        const items = (this.state.nonRecurringDif || []).filter(item => {
+            if (!search) return true;
+            return item.dono.toLowerCase().includes(search) ||
+                item.banco.toLowerCase().includes(search) ||
+                item.valor.toString().includes(search) ||
+                item.descricao.toLowerCase().includes(search);
+        });
+
+        count.textContent = `${items.length} itens`;
+        list.innerHTML = '';
+        panel.classList.toggle('hidden', items.length === 0);
+        copyAllBtn.disabled = items.length === 0;
+
+        items.forEach(item => {
+            const row = document.createElement('article');
+            row.className = 'non-recurring-item';
+            const categoriaAtual = this.getCategoryDraft(item);
+            const hasUnsavedCategory = categoriaAtual !== (item.categoria || '');
+
+            row.innerHTML = `
+                <div class="non-recurring-main">
+                    <div class="non-recurring-title">${this.escapeHtml(item.descricao || '-')}</div>
+                    <div class="non-recurring-meta">
+                        <span>${this.escapeHtml(item.dono || '-')}</span>
+                        <span>${this.escapeHtml(item.banco || '-')}</span>
+                        <span>${this.escapeHtml(item.data || '-')}</span>
+                        <span>R$ ${(item.valor || 0).toFixed(2)}</span>
+                    </div>
+                </div>
+                <div class="non-recurring-category">
+                    <label for="cat-${item.difRowIndex}">
+                        Categoria
+                        <span class="unsaved-indicator ${hasUnsavedCategory ? '' : 'hidden'}">não salvo</span>
+                    </label>
+                    <input id="cat-${item.difRowIndex}" type="text" class="glass-input non-recurring-category-input" value="${this.escapeHtml(categoriaAtual)}">
+                    <button type="button" class="btn-ghost" data-action="save-category" data-id="${item.difRowIndex}" ${hasUnsavedCategory ? '' : 'disabled'}>Salvar categoria</button>
+                </div>
+                <div class="non-recurring-row-actions">
+                    <button type="button" class="btn-accept" data-action="move-es" data-id="${item.difRowIndex}">Copiar</button>
+                    <button type="button" class="btn-reject" data-action="move-rej" data-id="${item.difRowIndex}">Rejeitar</button>
+                </div>
+            `;
+
+            const categoryInput = row.querySelector(`#cat-${item.difRowIndex}`);
+            const unsavedIndicator = row.querySelector('.unsaved-indicator');
+            const saveCategoryButton = row.querySelector('button[data-action="save-category"]');
+            if (categoryInput) {
+                categoryInput.addEventListener('input', (e) => {
+                    const nextValue = e.target.value;
+                    this.state.pendingCategoryEdits[item.difRowIndex] = nextValue;
+                    const changed = nextValue !== (item.categoria || '');
+                    if (unsavedIndicator) unsavedIndicator.classList.toggle('hidden', !changed);
+                    if (saveCategoryButton) saveCategoryButton.disabled = !changed;
+                });
+            }
+
+            const saveBtn = saveCategoryButton;
+            if (saveBtn) {
+                saveBtn.addEventListener('click', () => this.saveNonRecurringCategory(item.difRowIndex));
+            }
+
+            const moveEsBtn = row.querySelector('button[data-action="move-es"]');
+            if (moveEsBtn) {
+                moveEsBtn.addEventListener('click', () => this.copyNonRecurringToES(item.difRowIndex));
+            }
+
+            const moveRejBtn = row.querySelector('button[data-action="move-rej"]');
+            if (moveRejBtn) {
+                moveRejBtn.addEventListener('click', () => this.rejectNonRecurringToREJ(item.difRowIndex));
+            }
+
+            list.appendChild(row);
+        });
+    },
+
+    getCategoryDraft(item) {
+        const draft = this.state.pendingCategoryEdits[item.difRowIndex];
+        if (typeof draft === 'string') return draft;
+        return item.categoria || '';
+    },
+
+    escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    },
+
+    async saveNonRecurringCategory(difRowIndex) {
+        const categoria = this.state.pendingCategoryEdits[difRowIndex];
+        if (typeof categoria !== 'string') return;
+
+        try {
+            const res = await this.authorizedFetch(`${API_URL}/dif/non-recurring/${difRowIndex}/category`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ categoria })
+            });
+
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(txt || 'Falha ao salvar categoria');
+            }
+
+            this.state.nonRecurringDif = this.state.nonRecurringDif.map(item =>
+                item.difRowIndex === difRowIndex ? { ...item, categoria } : item
+            );
+            delete this.state.pendingCategoryEdits[difRowIndex];
+            this.renderQueue(document.getElementById('search')?.value || '');
+        } catch (err) {
+            console.error(err);
+            alert(`Erro ao salvar categoria: ${err.message}`);
+        }
+    },
+
+    async copyNonRecurringToES(difRowIndex) {
+        try {
+            const res = await this.authorizedFetch(`${API_URL}/dif/non-recurring/${difRowIndex}/move-to-es`, {
+                method: 'POST'
+            });
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(txt || 'Falha ao copiar para ES');
+            }
+
+            await this.loadQueue();
+        } catch (err) {
+            console.error(err);
+            alert(`Erro ao copiar para ES: ${err.message}`);
+        }
+    },
+
+    async rejectNonRecurringToREJ(difRowIndex) {
+        if (!confirm('Tem certeza que deseja rejeitar esta transação?')) return;
+
+        try {
+            const res = await this.authorizedFetch(`${API_URL}/dif/non-recurring/${difRowIndex}/move-to-rej`, {
+                method: 'POST'
+            });
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(txt || 'Falha ao mover para REJ');
+            }
+
+            await this.loadQueue();
+        } catch (err) {
+            console.error(err);
+            alert(`Erro ao mover para REJ: ${err.message}`);
+        }
+    },
+
+    async copyAllNonRecurringToES() {
+        const total = (this.state.nonRecurringDif || []).length;
+        if (total === 0) return;
+        if (!confirm(`Copiar ${total} linha(s) de DIF não recorrente para ES?`)) return;
+
+        try {
+            const res = await this.authorizedFetch(`${API_URL}/dif/non-recurring/move-all-to-es`, {
+                method: 'POST'
+            });
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(txt || 'Falha ao copiar todas para ES');
+            }
+
+            const payload = await this.parseResponseSafely(res);
+            const moved = payload.data?.movedToES ?? total;
+            alert(`${moved} linha(s) copiada(s) para ES.`);
+            await this.loadQueue();
+        } catch (err) {
+            console.error(err);
+            alert(`Erro ao copiar todas para ES: ${err.message}`);
+        }
     },
 
     loadExecutionOptions() {

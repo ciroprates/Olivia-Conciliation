@@ -3,10 +3,10 @@ package models
 // Column indices (A=1, so index 0 would be A-1, but Sheets API GridRange sometimes uses 0-based.
 // However, when parsing a row slice []interface{}, index 0 is Column A.
 const (
-	ColumnData      = 1 // B
-	ColumnDescricao = 2 // C
-	ColumnValor     = 3 // D
-	// Categoria não foi mapeada propositalmente, pois não é necessário para a lógica de conciliação, mas pode ser adicionado se necessário.
+	ColumnData       = 1 // B
+	ColumnDescricao  = 2 // C
+	ColumnValor      = 3 // D
+	ColumnCategoria  = 4 // E
 	ColumnDono       = 5 // F
 	ColumnBanco      = 6 // G
 	ColumnConta      = 7 // H
@@ -24,6 +24,7 @@ type Transaction struct {
 	Recorrente bool    `json:"recorrente"`
 	Data       string  `json:"data"`
 	Valor      float64 `json:"valor"`
+	Categoria  string  `json:"categoria"`
 	IdParcela  string  `json:"idParcela"`
 	Sheet      string  `json:"sheet"` // "ES" or "DIF"
 }
@@ -50,4 +51,24 @@ type PendingConciliationSummary struct {
 // AcceptRequest defines the body for accepting a conciliation
 type AcceptRequest struct {
 	EsRowIndices []int `json:"esRowIndices"`
+}
+
+type NonRecurringDifSummary struct {
+	DifRowIndex int     `json:"difRowIndex"`
+	Dono        string  `json:"dono"`
+	Banco       string  `json:"banco"`
+	Conta       string  `json:"conta"`
+	Descricao   string  `json:"descricao"`
+	Data        string  `json:"data"`
+	Valor       float64 `json:"valor"`
+	Categoria   string  `json:"categoria"`
+	IdParcela   string  `json:"idParcela"`
+}
+
+type UpdateCategoryRequest struct {
+	Categoria string `json:"categoria"`
+}
+
+type NonRecurringBulkActionResult struct {
+	MovedToES int `json:"movedToES"`
 }
