@@ -91,6 +91,36 @@ header h1 {
     padding: 2rem;
 }
 
+.app-notification {
+    margin: 1.25rem 2rem 0 2rem;
+    padding: 0.85rem 1rem;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    font-weight: 600;
+    line-height: 1.35;
+    opacity: 0;
+    transform: translateY(-8px);
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.app-notification.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.app-notification.success {
+    background: rgba(16, 185, 129, 0.15);
+    color: #a7f3d0;
+    border-color: rgba(16, 185, 129, 0.55);
+}
+
+.app-notification.error {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fecaca;
+    border-color: rgba(239, 68, 68, 0.6);
+}
+
 /* Queue View */
 .filters {
     display: flex;
@@ -860,6 +890,10 @@ header h1 {
 }
 
 @media (max-width: 900px) {
+    .app-notification {
+        margin: 1rem 1rem 0 1rem;
+    }
+
     .filters {
         flex-direction: column;
         align-items: stretch;
