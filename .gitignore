@@ -7,3 +7,7 @@
 
 # OS / editor
 .DS_Store
+.gocache
+
+# Local TLS/ACME state
+certbot/

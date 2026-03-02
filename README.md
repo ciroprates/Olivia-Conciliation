@@ -48,14 +48,7 @@ COOKIE_DOMAIN=
 
 3. Suba o backend:
 ```bash
-./scripts/go-local.sh run backend/main.go
-```
-
-Se o Go do sistema estiver inconsistente (erro de runtime com símbolos duplicados), use o toolchain local do repositório:
-```bash
-mkdir -p .toolchain
-tar -C .toolchain -xzf /tmp/go1.25.5.linux-amd64.tar.gz
-./scripts/go-local.sh version
+go run backend/main.go
 ```
 
 4. No `frontend/app.js`, use URLs diretas no modo local:
@@ -111,6 +104,7 @@ Depois execute `docker compose up -d`.
 | `SHEET_ES` | Opcional | `Entradas e Saídas` | Nome da aba ES. |
 | `SHEET_DIF` | Opcional | `Diferença` | Nome da aba DIF. |
 | `SHEET_REJ` | Opcional | `Rejeitados` | Nome da aba de rejeitados. |
+| `SHEET_HOMOLOG` | Opcional | `Homologação` | Aba usada para persistir edição de `data` dos itens não recorrentes. |
 | `ECR_REGISTRY` | Obrigatória em Docker/CI | `683684736241.dkr.ecr.us-east-1.amazonaws.com` | Registry ECR das imagens. |
 | `ECR_REPOSITORY` | Obrigatória em Docker/CI | `olivia-conciliation` | Repositório ECR das imagens. |
 
@@ -130,6 +124,7 @@ Fonte: `scripts/deploy-ec2.sh` (`cat > .env <<EOF`).
 | `SHEET_ES` | Não (fixa no script) | `Entradas e Saídas` | Aba ES no Google Sheets. |
 | `SHEET_DIF` | Não (fixa no script) | `Diferença` | Aba DIF no Google Sheets. |
 | `SHEET_REJ` | Não (fixa no script) | `Rejeitados` | Aba de rejeitados. |
+| `SHEET_HOMOLOG` | Não (fixa no script) | `Homologação` | Aba usada para persistir edição de `data` dos itens não recorrentes. |
 | `ADMIN_USER` | Sim (`secrets.ADMIN_USER`) | `admin` | Usuário de autenticação. |
 | `ADMIN_PASS` | Sim (`secrets.ADMIN_PASS`) | `senha_forte` | Senha de autenticação. |
 | `JWT_SECRET` | Sim (`secrets.JWT_SECRET`) | `segredo_super_secreto` | Chave de assinatura JWT. |
