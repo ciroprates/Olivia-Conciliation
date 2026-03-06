@@ -55,9 +55,17 @@ func (c *Client) FetchRows(sheetName string) ([][]interface{}, error) {
 }
 
 func (c *Client) WriteCell(sheetName string, rowIndex int, colIndex int, value string) error {
-	// rowIndex is 0-based. Sheets API uses A1 notation.
-	// Column A = 0.
-	colLetter := string(rune('A' + colIndex))
+	// colIndex is 0-based. Sheets API uses A1 notation.
+	colLetter := ""
+	tempIdx := colIndex
+	for {
+		colLetter = string(rune('A'+(tempIdx%26))) + colLetter
+		tempIdx = (tempIdx / 26) - 1
+		if tempIdx < 0 {
+			break
+		}
+	}
+
 	// Row number is 1-based (rowIndex + 1)
 	rangeStr := fmt.Sprintf("%s!%s%d", sheetName, colLetter, rowIndex+1)
 

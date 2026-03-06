@@ -214,7 +214,10 @@ func validateTrustedOrigin(r *http.Request) error {
 	}
 
 	referer := strings.TrimSpace(r.Header.Get("Referer"))
-	if referer != "" && !strings.HasPrefix(referer, allowedOrigin+"/") {
+	if referer != "" {
+		if referer == allowedOrigin || strings.HasPrefix(referer, allowedOrigin+"/") {
+			return nil
+		}
 		return errors.New("invalid referer")
 	}
 
