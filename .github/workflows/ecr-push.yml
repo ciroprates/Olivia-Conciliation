@@ -17,8 +17,23 @@ env:
   APP_DIR: ${{ vars.APP_DIR }}
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run tests
+        run: go test ./backend/...
+
   build-and-push:
     runs-on: ubuntu-latest
+    needs: test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -152,16 +167,25 @@ jobs:
           echo "Comando enviado! ID: $COMMAND_ID"
           echo "Aguardando conclusão..."
 
-          aws ssm wait command-executed \
-            --command-id "$COMMAND_ID" \
-            --instance-id "$INSTANCE_ID"
-
-          # Verifica se o comando teve sucesso
-          STATUS=$(aws ssm list-command-invocations \
-            --command-id "$COMMAND_ID" \
-            --instance-id "$INSTANCE_ID" \
-            --query "CommandInvocations[0].Status" \
-            --output text)
+          # Poll manually com timeout de 15 minutos (aws ssm wait estoura em ~100s)
+          TIMEOUT=900
+          ELAPSED=0
+          INTERVAL=15
+          STATUS="InProgress"
+          while [ "$STATUS" = "InProgress" ] || [ "$STATUS" = "Pending" ]; do
+            if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
+              echo "Erro: timeout de ${TIMEOUT}s aguardando o comando SSM."
+              exit 1
+            fi
+            sleep "$INTERVAL"
+            ELAPSED=$((ELAPSED + INTERVAL))
+            STATUS=$(aws ssm list-command-invocations \
+              --command-id "$COMMAND_ID" \
+              --instance-id "$INSTANCE_ID" \
+              --query "CommandInvocations[0].Status" \
+              --output text)
+            echo "Status após ${ELAPSED}s: $STATUS"
+          done
 
           if [ "$STATUS" != "Success" ]; then
             echo "Erro no deploy! Status: $STATUS"
