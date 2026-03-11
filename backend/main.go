@@ -96,6 +96,10 @@ func main() {
 			h.UpdateNonRecurringDifCategory(w, r)
 			return
 		}
+		if strings.HasSuffix(path, "/date") && r.Method == "PATCH" {
+			h.UpdateNonRecurringDifDate(w, r)
+			return
+		}
 		http.NotFound(w, r)
 	})
 

@@ -404,18 +404,25 @@ func (l *Logic) MoveAllNonRecurringDifToES() (*models.NonRecurringBulkActionResu
 }
 
 func (l *Logic) UpdateDifCategory(difIndex int, categoria string) error {
-	difRows, err := l.client.FetchRows(os.Getenv("SHEET_DIF"))
+	homRows, err := l.client.FetchRows(os.Getenv("SHEET_HOM"))
 	if err != nil {
 		return err
 	}
-	if difIndex >= len(difRows) {
+	if difIndex >= len(homRows) {
 		return errors.New("index out of bounds")
 	}
 
-	rowContent := difRows[difIndex]
+	rowContent := homRows[difIndex]
 	if isEmptyRow(rowContent) {
-		return errors.New("DIF row is empty")
+		return errors.New("row is empty")
 	}
 
-	return l.client.WriteCell(os.Getenv("SHEET_DIF"), difIndex, models.ColumnCategoria, categoria)
+	return l.client.WriteCell(os.Getenv("SHEET_HOM"), difIndex, models.ColumnCategoria, categoria)
+}
+
+func (l *Logic) UpdateDifDate(difIndex int, data string) error {
+	if difIndex < 0 {
+		return errors.New("invalid index")
+	}
+	return l.client.WriteCell(os.Getenv("SHEET_HOM"), difIndex, models.ColumnData, data)
 }

@@ -28,6 +28,7 @@ const app = {
         statusPollingInterval: null,
         executionOptions: { ...DEFAULT_EXECUTION_OPTIONS },
         pendingCategoryEdits: {},
+        pendingDateEdits: {},
         notificationTimeoutId: null,
         notificationHideTimeoutId: null
     },
@@ -258,6 +259,7 @@ const app = {
             this.state.conciliations = conciliations || [];
             this.state.nonRecurringDif = nonRecurring || [];
             this.state.pendingCategoryEdits = {};
+            this.state.pendingDateEdits = {};
             this.renderQueue();
         } catch (err) {
             console.error(err);
@@ -336,6 +338,8 @@ const app = {
             row.className = 'non-recurring-item';
             const categoriaAtual = this.getCategoryDraft(item);
             const hasUnsavedCategory = categoriaAtual !== (item.categoria || '');
+            const dataAtual = this.getDateDraft(item);
+            const hasUnsavedDate = dataAtual !== (item.data || '');
 
             row.innerHTML = `
                 <div class="non-recurring-main">
@@ -355,6 +359,14 @@ const app = {
                     <input id="cat-${item.difRowIndex}" type="text" class="glass-input non-recurring-category-input" value="${this.escapeHtml(categoriaAtual)}">
                     <button type="button" class="btn-ghost" data-action="save-category" data-id="${item.difRowIndex}" ${hasUnsavedCategory ? '' : 'disabled'}>Salvar categoria</button>
                 </div>
+                <div class="non-recurring-date">
+                    <label for="date-${item.difRowIndex}">
+                        Data
+                        <span class="unsaved-indicator date-unsaved-indicator ${hasUnsavedDate ? '' : 'hidden'}">não salvo</span>
+                    </label>
+                    <input id="date-${item.difRowIndex}" type="date" class="glass-input" value="${this.escapeHtml(dataAtual)}">
+                    <button type="button" class="btn-ghost" data-action="save-date" data-id="${item.difRowIndex}" ${hasUnsavedDate ? '' : 'disabled'}>Salvar data</button>
+                </div>
                 <div class="non-recurring-row-actions">
                     <button type="button" class="btn-accept" data-action="move-es" data-id="${item.difRowIndex}">Copiar</button>
                     <button type="button" class="btn-reject" data-action="move-rej" data-id="${item.difRowIndex}">Rejeitar</button>
@@ -373,10 +385,24 @@ const app = {
                     if (saveCategoryButton) saveCategoryButton.disabled = !changed;
                 });
             }
+            if (saveCategoryButton) {
+                saveCategoryButton.addEventListener('click', () => this.saveNonRecurringCategory(item.difRowIndex));
+            }
 
-            const saveBtn = saveCategoryButton;
-            if (saveBtn) {
-                saveBtn.addEventListener('click', () => this.saveNonRecurringCategory(item.difRowIndex));
+            const dateInput = row.querySelector(`#date-${item.difRowIndex}`);
+            const dateUnsavedIndicator = row.querySelector('.date-unsaved-indicator');
+            const saveDateButton = row.querySelector('button[data-action="save-date"]');
+            if (dateInput) {
+                dateInput.addEventListener('input', (e) => {
+                    const nextValue = e.target.value;
+                    this.state.pendingDateEdits[item.difRowIndex] = nextValue;
+                    const changed = nextValue !== (item.data || '');
+                    if (dateUnsavedIndicator) dateUnsavedIndicator.classList.toggle('hidden', !changed);
+                    if (saveDateButton) saveDateButton.disabled = !changed;
+                });
+            }
+            if (saveDateButton) {
+                saveDateButton.addEventListener('click', () => this.saveNonRecurringDate(item.difRowIndex));
             }
 
             const moveEsBtn = row.querySelector('button[data-action="move-es"]');
@@ -397,6 +423,12 @@ const app = {
         const draft = this.state.pendingCategoryEdits[item.difRowIndex];
         if (typeof draft === 'string') return draft;
         return item.categoria || '';
+    },
+
+    getDateDraft(item) {
+        const draft = this.state.pendingDateEdits[item.difRowIndex];
+        if (typeof draft === 'string') return draft;
+        return item.data || '';
     },
 
     escapeHtml(value) {
@@ -432,6 +464,33 @@ const app = {
         } catch (err) {
             console.error(err);
             alert(`Erro ao salvar categoria: ${err.message}`);
+        }
+    },
+
+    async saveNonRecurringDate(difRowIndex) {
+        const data = this.state.pendingDateEdits[difRowIndex];
+        if (typeof data !== 'string') return;
+
+        try {
+            const res = await this.authorizedFetch(`${API_URL}/dif/non-recurring/${difRowIndex}/date`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data })
+            });
+
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(txt || 'Falha ao salvar data');
+            }
+
+            this.state.nonRecurringDif = this.state.nonRecurringDif.map(item =>
+                item.difRowIndex === difRowIndex ? { ...item, data } : item
+            );
+            delete this.state.pendingDateEdits[difRowIndex];
+            this.renderQueue(document.getElementById('search')?.value || '');
+        } catch (err) {
+            console.error(err);
+            alert(`Erro ao salvar data: ${err.message}`);
         }
     },
 

@@ -69,6 +69,10 @@ type UpdateCategoryRequest struct {
 	Categoria string `json:"categoria"`
 }
 
+type UpdateDateRequest struct {
+	Data string `json:"data"`
+}
+
 type NonRecurringBulkActionResult struct {
 	MovedToES int `json:"movedToES"`
 }
