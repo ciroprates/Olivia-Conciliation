@@ -68,7 +68,17 @@ sudo docker compose up -d
 echo "Recarregando Nginx..."
 sudo docker compose exec -T nginx nginx -s reload || sudo docker compose restart nginx
 
-# 6. Limpeza
+# 6. Configura renovação automática de certificado SSL (idempotente)
+echo "Configurando cron de renovação SSL..."
+CERTBOT_CRON="0 0,12 * * * cd $APP_DIR && sudo docker compose run --rm certbot renew >> /var/log/certbot-renew.log 2>&1 && sudo docker compose exec -T nginx nginx -s reload >> /var/log/certbot-renew.log 2>&1"
+(sudo crontab -l 2>/dev/null | grep -v "certbot renew"; echo "$CERTBOT_CRON") | sudo crontab -
+
+# 7. Renova certificado SSL imediatamente
+echo "Renovando certificado SSL..."
+echo "--- $(date) ---" >> /var/log/certbot-renew.log
+sudo docker compose run --rm certbot renew >> /var/log/certbot-renew.log 2>&1 || true
+sudo docker compose exec -T nginx nginx -s reload >> /var/log/certbot-renew.log 2>&1 || sudo docker compose restart nginx
+
 echo "Limpando imagens antigas..."
 sudo docker image prune -f
 

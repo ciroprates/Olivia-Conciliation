@@ -149,7 +149,11 @@ Workflow: `.github/workflows/ecr-push.yml`
 3. `scripts/deploy-ec2.sh` na EC2 gera `key.json` e `.env`.
 4. `docker compose pull && docker compose up -d` aplica o deploy.
 
-### SSL (manual na EC2)
+### SSL
+
+O `deploy-ec2.sh` automatiza a renovação: instala um cron root (`0 0,12 * * *`) e já renova o certificado ao final de cada deploy. O log fica em `/var/log/certbot-renew.log` na EC2.
+
+Para emitir o certificado inicial (primeira vez ou cert perdido):
 
 ```bash
 cd $APP_DIR
@@ -157,7 +161,7 @@ chmod +x scripts/setup-ssl.sh
 sudo ./scripts/setup-ssl.sh
 ```
 
-O certificado inicial cobre `console`, `n8n` e `waha` em `olivinha.site`.
+O certificado cobre `console`, `n8n` e `waha` em `olivinha.site`.
 
 ## 🔒 Segurança
 

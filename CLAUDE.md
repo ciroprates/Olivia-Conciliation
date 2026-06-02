@@ -13,6 +13,12 @@ go run backend/main.go
 # Build binary
 go build -o olivia-backend ./backend
 
+# Run tests
+go test ./backend/...
+
+# Run tests for a single package
+go test ./backend/service/...
+
 # Tidy dependencies
 go mod tidy
 ```
@@ -68,12 +74,33 @@ backend/
 
 ### Spreadsheet model
 
-Three sheets, configurable via env vars:
+Four sheets, configurable via env vars:
 - **ES** (`SHEET_ES`, default `"Entradas e Saídas"`): Confirmed transactions. Pending ones have `Recorrente=true` and no `IdParcela`, or `IdParcela` prefixed with `synthetic`.
 - **DIF** (`SHEET_DIF`, default `"Diferença"`): Installment transactions from Pluggy needing reconciliation. Recurring rows are candidates for matching against ES.
 - **REJ** (`SHEET_REJ`, default `"Rejeitados"`): Rejected transactions (audit trail).
+- **HOM** (`SHEET_HOM`, default `"Homologação"`): Used for editing category and date on non-recurring DIF rows. **Not validated at startup** — missing `SHEET_HOM` will only fail at runtime when those endpoints are called.
 
 Column layout (0-based index in row slice): B=Data, C=Descricao, D=Valor, E=Categoria, F=Dono, G=Banco, H=Conta, I=Recorrente, J=IdParcela.
+
+### Conciliation workflows
+
+There are two distinct workflows, one per transaction type in DIF:
+
+**Recurring DIF rows** (conciliation flow):
+- `GET /api/conciliations` — list recurring DIF rows with candidate count
+- `GET /api/conciliations/{rowIndex}` — get details with matching ES candidates
+- `POST /api/conciliations/{rowIndex}/accept` — writes DIF's `IdParcela` into matched ES row's `ColumnIdParcela`
+- `POST /api/conciliations/{rowIndex}/reject` — appends DIF row to REJ, then clears DIF row
+
+**Non-recurring DIF rows** (manual review flow):
+- `GET /api/dif/non-recurring` — list non-recurring DIF rows
+- `POST /api/dif/non-recurring/{rowIndex}/move-to-es` — moves row from DIF to ES
+- `POST /api/dif/non-recurring/{rowIndex}/move-to-rej` — moves row from DIF to REJ
+- `POST /api/dif/non-recurring/move-all-to-es` — bulk move all non-recurring DIF rows to ES
+- `PATCH /api/dif/non-recurring/{rowIndex}/category` — updates category in **SHEET_HOM** (not SHEET_DIF)
+- `PATCH /api/dif/non-recurring/{rowIndex}/date` — updates date in **SHEET_HOM** (not SHEET_DIF)
+
+**Important:** The `{rowIndex}` in all API paths is the **0-based row index in the sheet array** (row 0 is the header, data starts at 1). It is not a sequential or opaque ID.
 
 ### Conciliation matching logic
 
@@ -84,12 +111,20 @@ Matching between DIF (reference) and ES (candidates) requires:
 **Accept**: writes DIF's `IdParcela` into the matched ES row's `ColumnIdParcela` column.
 **Reject**: appends DIF row to REJ, then clears the DIF row (row content cleared, not deleted, to preserve row indices).
 
+### Google Sheets credentials
+
+The sheets client reads a service account key file. It checks `GOOGLE_APPLICATION_CREDENTIALS` env var first; if unset, falls back to `credentials.json` in the working directory. In production, the deploy script generates this as `key.json` and sets the env var accordingly.
+
 ### Authentication
 
 - Single admin user (`ADMIN_USER`/`ADMIN_PASS` from env)
 - JWT stored in `HttpOnly` cookie `olivia_session` (24h expiry)
 - CSRF double-submit pattern: cookie `olivia_csrf` + header `X-CSRF-Token`, required for POST/PUT/PATCH/DELETE
 - Origin/Referer validation against `APP_ORIGIN`
+
+### Required env vars (validated at startup)
+
+`SHEET_SPREADSHEET_ID`, `ADMIN_USER`, `ADMIN_PASS`, `JWT_SECRET`, `SHEET_ES`, `SHEET_DIF`, `SHEET_REJ`. Note: `SHEET_HOM` and `APP_ORIGIN` are **not** in the startup check.
 
 ### Local dev vs production differences
 
