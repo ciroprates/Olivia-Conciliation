@@ -81,11 +81,16 @@ func (c *Client) WriteCell(sheetName string, rowIndex int, colIndex int, value s
 }
 
 func (c *Client) AppendRow(sheetName string, values []interface{}) error {
-	rangeStr := sheetName
+	rows, err := c.FetchRows(sheetName)
+	if err != nil {
+		return fmt.Errorf("unable to fetch rows for append: %v", err)
+	}
+	nextRow := len(rows) + 1
+	rangeStr := fmt.Sprintf("%s!A%d", sheetName, nextRow)
 	val := &sheets.ValueRange{
 		Values: [][]interface{}{values},
 	}
-	_, err := c.srv.Spreadsheets.Values.Append(c.spreadsheetID, rangeStr, val).ValueInputOption("RAW").Do()
+	_, err = c.srv.Spreadsheets.Values.Update(c.spreadsheetID, rangeStr, val).ValueInputOption("RAW").Do()
 	return err
 }
 
