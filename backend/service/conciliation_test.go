@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"olivia-conciliation/backend/config"
 	"olivia-conciliation/backend/models"
 )
 
@@ -257,11 +258,13 @@ func makeRow(dono, banco, conta, valor, idParcela, recorrente string) []interfac
 
 func newTestLogic(t *testing.T, sheetData map[string][][]interface{}) *Logic {
 	t.Helper()
-	t.Setenv("SHEET_DIF", "DIF")
-	t.Setenv("SHEET_ES", "ES")
-	t.Setenv("SHEET_REJ", "REJ")
-	t.Setenv("SHEET_HOM", "HOM")
-	return NewLogic(newMemRepo(sheetData))
+	cfg := config.Config{
+		SheetDIF: "DIF",
+		SheetES:  "ES",
+		SheetREJ: "REJ",
+		SheetHOM: "HOM",
+	}
+	return NewLogic(newMemRepo(sheetData), cfg)
 }
 
 func TestAccept_WritesIdParcelaToES(t *testing.T) {

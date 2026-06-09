@@ -7,9 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"os"
 	"strings"
 	"time"
+
+	"olivia-conciliation/backend/config"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -35,16 +36,12 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	adminUser := os.Getenv("ADMIN_USER")
-	adminPass := os.Getenv("ADMIN_PASS")
-	jwtSecret := os.Getenv("JWT_SECRET")
-
-	if adminUser == "" || adminPass == "" || jwtSecret == "" {
+	if h.cfg.AdminUser == "" || h.cfg.AdminPass == "" || h.cfg.JWTSecret == "" {
 		http.Error(w, "Auth configuration missing", http.StatusInternalServerError)
 		return
 	}
 
-	if req.Username != adminUser || req.Password != adminPass {
+	if req.Username != h.cfg.AdminUser || req.Password != h.cfg.AdminPass {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
@@ -60,13 +57,13 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		"exp":  time.Now().Add(time.Hour * 24).Unix(),
 	})
 
-	tokenString, err := token.SignedString([]byte(jwtSecret))
+	tokenString, err := token.SignedString([]byte(h.cfg.JWTSecret))
 	if err != nil {
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
 
-	setAuthCookies(w, tokenString, csrfToken)
+	h.setAuthCookies(w, tokenString, csrfToken)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(LoginResponse{Authenticated: true})
@@ -78,19 +75,19 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clearAuthCookies(w)
+	h.clearAuthCookies(w)
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, err := parseRequestToken(r); err != nil {
+		if _, err := h.parseRequestToken(r); err != nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
 		if requiresCSRF(r.Method) {
-			if err := validateCSRFFromRequest(r); err != nil {
+			if err := h.validateCSRFFromRequest(r); err != nil {
 				http.Error(w, "Forbidden", http.StatusForbidden)
 				return
 			}
@@ -106,7 +103,7 @@ func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := parseRequestToken(r); err != nil {
+	if _, err := h.parseRequestToken(r); err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -117,7 +114,7 @@ func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if requiresCSRF(originMethod) {
-		if err := validateCSRFFromRequest(r); err != nil {
+		if err := h.validateCSRFFromRequest(r); err != nil {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
@@ -126,7 +123,7 @@ func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func parseRequestToken(r *http.Request) (*jwt.Token, error) {
+func (h *Handler) parseRequestToken(r *http.Request) (*jwt.Token, error) {
 	tokenString := extractBearerToken(r.Header.Get("Authorization"))
 	if tokenString == "" {
 		cookie, err := r.Cookie("olivia_session")
@@ -138,8 +135,7 @@ func parseRequestToken(r *http.Request) (*jwt.Token, error) {
 		return nil, errors.New("missing token")
 	}
 
-	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
+	if h.cfg.JWTSecret == "" {
 		return nil, errors.New("missing jwt secret")
 	}
 
@@ -147,7 +143,7 @@ func parseRequestToken(r *http.Request) (*jwt.Token, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("unexpected signing method")
 		}
-		return []byte(jwtSecret), nil
+		return []byte(h.cfg.JWTSecret), nil
 	})
 	if err != nil || !token.Valid {
 		return nil, errors.New("invalid token")
@@ -177,8 +173,8 @@ func requiresCSRF(method string) bool {
 	}
 }
 
-func validateCSRFFromRequest(r *http.Request) error {
-	if err := validateTrustedOrigin(r); err != nil {
+func (h *Handler) validateCSRFFromRequest(r *http.Request) error {
+	if err := h.validateTrustedOrigin(r); err != nil {
 		return err
 	}
 
@@ -199,8 +195,8 @@ func validateCSRFFromRequest(r *http.Request) error {
 	return nil
 }
 
-func validateTrustedOrigin(r *http.Request) error {
-	allowedOrigin := strings.TrimSpace(os.Getenv("APP_ORIGIN"))
+func (h *Handler) validateTrustedOrigin(r *http.Request) error {
+	allowedOrigin := strings.TrimSpace(h.cfg.AppOrigin)
 	if allowedOrigin == "" {
 		allowedOrigin = "https://console.olivinha.site"
 	}
@@ -232,50 +228,43 @@ func generateCSRFToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
-func setAuthCookies(w http.ResponseWriter, sessionToken, csrfToken string) {
-	cookieDomain := os.Getenv("COOKIE_DOMAIN")
-	secureCookies := os.Getenv("COOKIE_SECURE") != "false"
+func (h *Handler) setAuthCookies(w http.ResponseWriter, sessionToken, csrfToken string) {
 	maxAge := 24 * 60 * 60
 	expiresAt := time.Now().Add(24 * time.Hour)
 
-	sessionCookie := &http.Cookie{
+	http.SetCookie(w, &http.Cookie{
 		Name:     "olivia_session",
 		Value:    sessionToken,
 		Path:     "/",
-		Domain:   cookieDomain,
+		Domain:   h.cfg.CookieDomain,
 		HttpOnly: true,
-		Secure:   secureCookies,
+		Secure:   h.cfg.CookieSecure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   maxAge,
 		Expires:  expiresAt,
-	}
-	http.SetCookie(w, sessionCookie)
+	})
 
-	csrfCookie := &http.Cookie{
+	http.SetCookie(w, &http.Cookie{
 		Name:     "olivia_csrf",
 		Value:    csrfToken,
 		Path:     "/",
-		Domain:   cookieDomain,
+		Domain:   h.cfg.CookieDomain,
 		HttpOnly: false,
-		Secure:   secureCookies,
+		Secure:   h.cfg.CookieSecure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   maxAge,
 		Expires:  expiresAt,
-	}
-	http.SetCookie(w, csrfCookie)
+	})
 }
 
-func clearAuthCookies(w http.ResponseWriter) {
-	cookieDomain := os.Getenv("COOKIE_DOMAIN")
-	secureCookies := os.Getenv("COOKIE_SECURE") != "false"
-
+func (h *Handler) clearAuthCookies(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "olivia_session",
 		Value:    "",
 		Path:     "/",
-		Domain:   cookieDomain,
+		Domain:   h.cfg.CookieDomain,
 		HttpOnly: true,
-		Secure:   secureCookies,
+		Secure:   h.cfg.CookieSecure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0),
@@ -285,11 +274,12 @@ func clearAuthCookies(w http.ResponseWriter) {
 		Name:     "olivia_csrf",
 		Value:    "",
 		Path:     "/",
-		Domain:   cookieDomain,
+		Domain:   h.cfg.CookieDomain,
 		HttpOnly: false,
-		Secure:   secureCookies,
+		Secure:   h.cfg.CookieSecure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0),
 	})
 }
+

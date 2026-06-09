@@ -3,18 +3,19 @@ package service
 import (
 	"errors"
 	"math"
-	"os"
 
+	"olivia-conciliation/backend/config"
 	"olivia-conciliation/backend/models"
 )
 
 type Logic struct {
 	repo   SheetRepository
+	cfg    config.Config
 	parser Parser
 }
 
-func NewLogic(repo SheetRepository) *Logic {
-	return &Logic{repo: repo}
+func NewLogic(repo SheetRepository, cfg config.Config) *Logic {
+	return &Logic{repo: repo, cfg: cfg}
 }
 
 func isMatch(dif, es models.Transaction) bool {
@@ -25,11 +26,11 @@ func isMatch(dif, es models.Transaction) bool {
 }
 
 func (l *Logic) GetConciliations() ([]models.PendingConciliationSummary, error) {
-	difRows, err := l.repo.FetchRows(os.Getenv("SHEET_DIF"))
+	difRows, err := l.repo.FetchRows(l.cfg.SheetDIF)
 	if err != nil {
 		return nil, err
 	}
-	esRows, err := l.repo.FetchRows(os.Getenv("SHEET_ES"))
+	esRows, err := l.repo.FetchRows(l.cfg.SheetES)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +76,7 @@ func (l *Logic) GetConciliations() ([]models.PendingConciliationSummary, error) 
 }
 
 func (l *Logic) GetConciliationDetails(difIndex int) (*models.ConciliationCandidate, error) {
-	difRows, err := l.repo.FetchRows(os.Getenv("SHEET_DIF"))
+	difRows, err := l.repo.FetchRows(l.cfg.SheetDIF)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +89,7 @@ func (l *Logic) GetConciliationDetails(difIndex int) (*models.ConciliationCandid
 		return nil, errors.New("DIF transaction is not recurring")
 	}
 
-	esRows, err := l.repo.FetchRows(os.Getenv("SHEET_ES"))
+	esRows, err := l.repo.FetchRows(l.cfg.SheetES)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +109,7 @@ func (l *Logic) GetConciliationDetails(difIndex int) (*models.ConciliationCandid
 }
 
 func (l *Logic) Accept(difIndex int, esIndices []int) error {
-	difRows, err := l.repo.FetchRows(os.Getenv("SHEET_DIF"))
+	difRows, err := l.repo.FetchRows(l.cfg.SheetDIF)
 	if err != nil {
 		return err
 	}
@@ -122,7 +123,7 @@ func (l *Logic) Accept(difIndex int, esIndices []int) error {
 	}
 
 	for _, esIdx := range esIndices {
-		if err := l.repo.WriteCell(os.Getenv("SHEET_ES"), esIdx, models.ColumnIdParcela, dif.IdParcela); err != nil {
+		if err := l.repo.WriteCell(l.cfg.SheetES, esIdx, models.ColumnIdParcela, dif.IdParcela); err != nil {
 			return err
 		}
 	}
@@ -130,7 +131,7 @@ func (l *Logic) Accept(difIndex int, esIndices []int) error {
 }
 
 func (l *Logic) Reject(difIndex int) error {
-	difRows, err := l.repo.FetchRows(os.Getenv("SHEET_DIF"))
+	difRows, err := l.repo.FetchRows(l.cfg.SheetDIF)
 	if err != nil {
 		return err
 	}
@@ -139,14 +140,14 @@ func (l *Logic) Reject(difIndex int) error {
 	}
 
 	rowContent := difRows[difIndex]
-	if err := l.repo.AppendRow(os.Getenv("SHEET_REJ"), rowContent); err != nil {
+	if err := l.repo.AppendRow(l.cfg.SheetREJ, rowContent); err != nil {
 		return err
 	}
-	return l.repo.ClearRow(os.Getenv("SHEET_DIF"), difIndex)
+	return l.repo.ClearRow(l.cfg.SheetDIF, difIndex)
 }
 
 func (l *Logic) ListNonRecurringDIF() ([]models.NonRecurringDifSummary, error) {
-	difRows, err := l.repo.FetchRows(os.Getenv("SHEET_DIF"))
+	difRows, err := l.repo.FetchRows(l.cfg.SheetDIF)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +181,7 @@ func (l *Logic) ListNonRecurringDIF() ([]models.NonRecurringDifSummary, error) {
 }
 
 func (l *Logic) MoveNonRecurringDifToES(difIndex int) error {
-	difRows, err := l.repo.FetchRows(os.Getenv("SHEET_DIF"))
+	difRows, err := l.repo.FetchRows(l.cfg.SheetDIF)
 	if err != nil {
 		return err
 	}
@@ -198,14 +199,14 @@ func (l *Logic) MoveNonRecurringDifToES(difIndex int) error {
 		return errors.New("DIF transaction is recurring")
 	}
 
-	if err := l.repo.AppendRow(os.Getenv("SHEET_ES"), rowContent); err != nil {
+	if err := l.repo.AppendRow(l.cfg.SheetES, rowContent); err != nil {
 		return err
 	}
-	return l.repo.ClearRow(os.Getenv("SHEET_DIF"), difIndex)
+	return l.repo.ClearRow(l.cfg.SheetDIF, difIndex)
 }
 
 func (l *Logic) MoveNonRecurringDifToREJ(difIndex int) error {
-	difRows, err := l.repo.FetchRows(os.Getenv("SHEET_DIF"))
+	difRows, err := l.repo.FetchRows(l.cfg.SheetDIF)
 	if err != nil {
 		return err
 	}
@@ -223,14 +224,14 @@ func (l *Logic) MoveNonRecurringDifToREJ(difIndex int) error {
 		return errors.New("DIF transaction is recurring")
 	}
 
-	if err := l.repo.AppendRow(os.Getenv("SHEET_REJ"), rowContent); err != nil {
+	if err := l.repo.AppendRow(l.cfg.SheetREJ, rowContent); err != nil {
 		return err
 	}
-	return l.repo.ClearRow(os.Getenv("SHEET_DIF"), difIndex)
+	return l.repo.ClearRow(l.cfg.SheetDIF, difIndex)
 }
 
 func (l *Logic) MoveAllNonRecurringDifToES() (*models.NonRecurringBulkActionResult, error) {
-	difRows, err := l.repo.FetchRows(os.Getenv("SHEET_DIF"))
+	difRows, err := l.repo.FetchRows(l.cfg.SheetDIF)
 	if err != nil {
 		return nil, err
 	}
@@ -247,10 +248,10 @@ func (l *Logic) MoveAllNonRecurringDifToES() (*models.NonRecurringBulkActionResu
 			continue
 		}
 
-		if err := l.repo.AppendRow(os.Getenv("SHEET_ES"), rowContent); err != nil {
+		if err := l.repo.AppendRow(l.cfg.SheetES, rowContent); err != nil {
 			return nil, err
 		}
-		if err := l.repo.ClearRow(os.Getenv("SHEET_DIF"), i); err != nil {
+		if err := l.repo.ClearRow(l.cfg.SheetDIF, i); err != nil {
 			return nil, err
 		}
 		moved++
@@ -260,7 +261,7 @@ func (l *Logic) MoveAllNonRecurringDifToES() (*models.NonRecurringBulkActionResu
 }
 
 func (l *Logic) UpdateDifCategory(difIndex int, categoria string) error {
-	homRows, err := l.repo.FetchRows(os.Getenv("SHEET_HOM"))
+	homRows, err := l.repo.FetchRows(l.cfg.SheetHOM)
 	if err != nil {
 		return err
 	}
@@ -272,12 +273,12 @@ func (l *Logic) UpdateDifCategory(difIndex int, categoria string) error {
 		return errors.New("row is empty")
 	}
 
-	return l.repo.WriteCell(os.Getenv("SHEET_HOM"), difIndex, models.ColumnCategoria, categoria)
+	return l.repo.WriteCell(l.cfg.SheetHOM, difIndex, models.ColumnCategoria, categoria)
 }
 
 func (l *Logic) UpdateDifDate(difIndex int, data string) error {
 	if difIndex < 0 {
 		return errors.New("invalid index")
 	}
-	return l.repo.WriteCell(os.Getenv("SHEET_HOM"), difIndex, models.ColumnData, data)
+	return l.repo.WriteCell(l.cfg.SheetHOM, difIndex, models.ColumnData, data)
 }
