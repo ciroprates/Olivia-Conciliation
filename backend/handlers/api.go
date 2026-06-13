@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -16,6 +17,16 @@ type Handler struct {
 
 func NewHandler(svc *service.Logic) *Handler {
 	return &Handler{svc: svc}
+}
+
+// extractPathID parses the integer segment at position depth from the end of path.
+// depth=1 → last segment, depth=2 → second-to-last, etc.
+func extractPathID(path string, depth int) (int, error) {
+	parts := strings.Split(path, "/")
+	if len(parts) < depth+1 {
+		return 0, errors.New("invalid path")
+	}
+	return strconv.Atoi(parts[len(parts)-depth])
 }
 
 func (h *Handler) GetConciliations(w http.ResponseWriter, r *http.Request) {
@@ -39,15 +50,7 @@ func (h *Handler) GetConciliationDetails(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Path: /api/conciliations/{id}
-	// Simple parsing, assuming standard mux or manual
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 3 {
-		http.Error(w, "Invalid path", http.StatusBadRequest)
-		return
-	}
-	idStr := parts[len(parts)-1]
-	id, err := strconv.Atoi(idStr)
+	id, err := extractPathID(r.URL.Path, 1)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
@@ -68,14 +71,7 @@ func (h *Handler) AcceptConciliation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parts := strings.Split(r.URL.Path, "/")
-	// /api/conciliations/{id}/accept -> parts: [ "", "api", "conciliations", "123", "accept"]
-	if len(parts) < 4 {
-		http.Error(w, "Invalid path", http.StatusBadRequest)
-		return
-	}
-	idStr := parts[len(parts)-2]
-	id, err := strconv.Atoi(idStr)
+	id, err := extractPathID(r.URL.Path, 2)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
@@ -102,14 +98,7 @@ func (h *Handler) RejectConciliation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parts := strings.Split(r.URL.Path, "/")
-	// /api/conciliations/{id}/reject
-	if len(parts) < 4 {
-		http.Error(w, "Invalid path", http.StatusBadRequest)
-		return
-	}
-	idStr := parts[len(parts)-2]
-	id, err := strconv.Atoi(idStr)
+	id, err := extractPathID(r.URL.Path, 2)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
@@ -146,14 +135,7 @@ func (h *Handler) MoveNonRecurringDifToES(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 5 {
-		http.Error(w, "Invalid path", http.StatusBadRequest)
-		return
-	}
-
-	idStr := parts[len(parts)-2]
-	id, err := strconv.Atoi(idStr)
+	id, err := extractPathID(r.URL.Path, 2)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
@@ -174,14 +156,7 @@ func (h *Handler) MoveNonRecurringDifToREJ(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 5 {
-		http.Error(w, "Invalid path", http.StatusBadRequest)
-		return
-	}
-
-	idStr := parts[len(parts)-2]
-	id, err := strconv.Atoi(idStr)
+	id, err := extractPathID(r.URL.Path, 2)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
@@ -218,14 +193,7 @@ func (h *Handler) UpdateNonRecurringDifCategory(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 5 {
-		http.Error(w, "Invalid path", http.StatusBadRequest)
-		return
-	}
-
-	idStr := parts[len(parts)-2]
-	id, err := strconv.Atoi(idStr)
+	id, err := extractPathID(r.URL.Path, 2)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
@@ -252,14 +220,7 @@ func (h *Handler) UpdateNonRecurringDifDate(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 5 {
-		http.Error(w, "Invalid path", http.StatusBadRequest)
-		return
-	}
-
-	idStr := parts[len(parts)-2]
-	id, err := strconv.Atoi(idStr)
+	id, err := extractPathID(r.URL.Path, 2)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
