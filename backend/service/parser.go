@@ -11,7 +11,7 @@ import (
 // Parser converts raw spreadsheet rows into domain types.
 type Parser struct{}
 
-func (p Parser) ParseFloat(v interface{}) float64 {
+func (p Parser) parseFloat(v interface{}) float64 {
 	if v == nil {
 		return 0
 	}
@@ -29,7 +29,7 @@ func (p Parser) ParseFloat(v interface{}) float64 {
 	return 0
 }
 
-func (p Parser) ParseBool(v interface{}) bool {
+func (p Parser) parseBool(v interface{}) bool {
 	if v == nil {
 		return false
 	}
@@ -73,13 +73,13 @@ func (p Parser) ParseTransaction(idx int, row []interface{}, sheetName string) m
 		t.Descricao = fmt.Sprintf("%v", row[models.ColumnDescricao])
 	}
 	if len(row) > models.ColumnRecorrente {
-		t.Recorrente = p.ParseBool(row[models.ColumnRecorrente])
+		t.Recorrente = p.parseBool(row[models.ColumnRecorrente])
 	}
 	if len(row) > models.ColumnData {
 		t.Data = fmt.Sprintf("%v", row[models.ColumnData])
 	}
 	if len(row) > models.ColumnValor {
-		t.Valor = p.ParseFloat(row[models.ColumnValor])
+		t.Valor = p.parseFloat(row[models.ColumnValor])
 	}
 	if len(row) > models.ColumnCategoria {
 		t.Categoria = fmt.Sprintf("%v", row[models.ColumnCategoria])

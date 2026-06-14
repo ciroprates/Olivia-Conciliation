@@ -27,9 +27,9 @@ func TestParseFloat(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		got := p.ParseFloat(c.input)
+		got := p.parseFloat(c.input)
 		if math.Abs(got-c.expected) > 0.001 {
-			t.Errorf("ParseFloat(%v) = %v, want %v", c.input, got, c.expected)
+			t.Errorf("parseFloat(%v) = %v, want %v", c.input, got, c.expected)
 		}
 	}
 }
@@ -52,9 +52,9 @@ func TestParseBool(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		got := p.ParseBool(c.input)
+		got := p.parseBool(c.input)
 		if got != c.expected {
-			t.Errorf("ParseBool(%v) = %v, want %v", c.input, got, c.expected)
+			t.Errorf("parseBool(%v) = %v, want %v", c.input, got, c.expected)
 		}
 	}
 }
