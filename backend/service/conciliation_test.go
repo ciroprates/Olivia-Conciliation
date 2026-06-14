@@ -7,7 +7,7 @@ import (
 	"olivia-conciliation/backend/models"
 )
 
-// --- parseFloat ---
+var p Parser
 
 func TestParseFloat(t *testing.T) {
 	cases := []struct {
@@ -22,19 +22,17 @@ func TestParseFloat(t *testing.T) {
 		{"0", 0},
 		{"", 0},
 		{nil, 0},
-		{1234.56, 1234.56},   // numeric input via interface{}
+		{1234.56, 1234.56},
 		{"abc", 0},
 	}
 
 	for _, c := range cases {
-		got := parseFloat(c.input)
+		got := p.parseFloat(c.input)
 		if math.Abs(got-c.expected) > 0.001 {
 			t.Errorf("parseFloat(%v) = %v, want %v", c.input, got, c.expected)
 		}
 	}
 }
-
-// --- parseBool ---
 
 func TestParseBool(t *testing.T) {
 	cases := []struct {
@@ -54,16 +52,14 @@ func TestParseBool(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		got := parseBool(c.input)
+		got := p.parseBool(c.input)
 		if got != c.expected {
 			t.Errorf("parseBool(%v) = %v, want %v", c.input, got, c.expected)
 		}
 	}
 }
 
-// --- isPendingES ---
-
-func TestIsPendingES(t *testing.T) {
+func TestIsPending(t *testing.T) {
 	cases := []struct {
 		desc     string
 		t        models.Transaction
@@ -102,14 +98,33 @@ func TestIsPendingES(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		got := isPendingES(c.t)
+		got := p.IsPending(c.t)
 		if got != c.expected {
-			t.Errorf("[%s] isPendingES() = %v, want %v", c.desc, got, c.expected)
+			t.Errorf("[%s] IsPending() = %v, want %v", c.desc, got, c.expected)
 		}
 	}
 }
 
-// --- isMatch ---
+func TestIsEmpty(t *testing.T) {
+	cases := []struct {
+		desc     string
+		row      []interface{}
+		expected bool
+	}{
+		{"slice vazio", []interface{}{}, true},
+		{"apenas strings vazias", []interface{}{"", ""}, true},
+		{"apenas espacos", []interface{}{"   ", "  "}, true},
+		{"com conteudo", []interface{}{"", "Alice"}, false},
+		{"conteudo no primeiro campo", []interface{}{"valor", ""}, false},
+	}
+
+	for _, c := range cases {
+		got := p.IsEmpty(c.row)
+		if got != c.expected {
+			t.Errorf("[%s] IsEmpty() = %v, want %v", c.desc, got, c.expected)
+		}
+	}
+}
 
 func makeTransaction(dono, banco, conta string, valor float64) models.Transaction {
 	return models.Transaction{Dono: dono, Banco: banco, Conta: conta, Valor: valor}
@@ -178,29 +193,6 @@ func TestIsMatch(t *testing.T) {
 		got := isMatch(c.dif, c.es)
 		if got != c.expected {
 			t.Errorf("[%s] isMatch() = %v, want %v", c.desc, got, c.expected)
-		}
-	}
-}
-
-// --- isEmptyRow ---
-
-func TestIsEmptyRow(t *testing.T) {
-	cases := []struct {
-		desc     string
-		row      []interface{}
-		expected bool
-	}{
-		{"slice vazio", []interface{}{}, true},
-		{"apenas strings vazias", []interface{}{"", ""}, true},
-		{"apenas espacos", []interface{}{"   ", "  "}, true},
-		{"com conteudo", []interface{}{"", "Alice"}, false},
-		{"conteudo no primeiro campo", []interface{}{"valor", ""}, false},
-	}
-
-	for _, c := range cases {
-		got := isEmptyRow(c.row)
-		if got != c.expected {
-			t.Errorf("[%s] isEmptyRow() = %v, want %v", c.desc, got, c.expected)
 		}
 	}
 }
