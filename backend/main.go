@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"olivia-conciliation/backend/config"
 	"olivia-conciliation/backend/handlers"
 	"olivia-conciliation/backend/service"
 	"olivia-conciliation/backend/sheets"
@@ -29,6 +30,7 @@ func main() {
 		"SHEET_ES",
 		"SHEET_DIF",
 		"SHEET_REJ",
+		"SHEET_HOM",
 	}
 
 	missingEnvVars := collectMissingEnvVars(requiredEnvVars)
@@ -37,19 +39,19 @@ func main() {
 		log.Fatal("startup aborted due to missing required env vars")
 	}
 
-	spreadsheetID := os.Getenv("SHEET_SPREADSHEET_ID")
+	cfg := config.FromEnv()
 
 	// Init Sheets Client
-	client, err := sheets.NewClient(context.Background(), spreadsheetID)
+	client, err := sheets.NewClient(context.Background(), cfg.SpreadsheetID)
 	if err != nil {
 		log.Fatalf("Failed to create sheets client: %v", err)
 	}
 
 	// Init Service
-	svc := service.NewLogic(client)
+	svc := service.NewLogic(client, cfg)
 
 	// Init Handlers
-	h := handlers.NewHandler(svc)
+	h := handlers.NewHandler(svc, cfg)
 
 	mux := http.NewServeMux()
 

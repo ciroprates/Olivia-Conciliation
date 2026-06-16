@@ -7,16 +7,18 @@ import (
 	"strconv"
 	"strings"
 
+	"olivia-conciliation/backend/config"
 	"olivia-conciliation/backend/models"
 	"olivia-conciliation/backend/service"
 )
 
 type Handler struct {
 	svc *service.Logic
+	cfg config.Config
 }
 
-func NewHandler(svc *service.Logic) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(svc *service.Logic, cfg config.Config) *Handler {
+	return &Handler{svc: svc, cfg: cfg}
 }
 
 // extractPathID parses the integer segment at position depth from the end of path.
