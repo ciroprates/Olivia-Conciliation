@@ -555,3 +555,105 @@ func TestUpdateDifDate_NegativeIndex(t *testing.T) {
 		t.Error("expected error for negative index")
 	}
 }
+
+// --- Gaps restantes ---
+
+func TestGetConciliations_SkipsEmptyDIFRow(t *testing.T) {
+	header := []interface{}{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
+	emptyRow := []interface{}{}
+
+	repo := newMemRepo(map[string][][]interface{}{
+		"DIF": {header, emptyRow},
+		"ES":  {header},
+	})
+	results, err := newTestLogicWithRepo(t, repo).GetConciliations()
+	if err != nil {
+		t.Fatalf("GetConciliations() error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for empty DIF row, got %d", len(results))
+	}
+}
+
+func TestGetConciliationDetails_NoMatchingCandidates(t *testing.T) {
+	header := []interface{}{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
+	difRow := makeRow("Alice", "BancoBR", "Corrente", "100.00", "p-1", "sim")
+	esRow := makeRow("Bob", "OutroBanco", "Poupanca", "999.00", "", "sim")
+
+	repo := newMemRepo(map[string][][]interface{}{
+		"DIF": {header, difRow},
+		"ES":  {header, esRow},
+	})
+	result, err := newTestLogicWithRepo(t, repo).GetConciliationDetails(1)
+	if err != nil {
+		t.Fatalf("GetConciliationDetails() error: %v", err)
+	}
+	if len(result.Candidates) != 0 {
+		t.Errorf("expected 0 candidates, got %d", len(result.Candidates))
+	}
+}
+
+func TestReject_OutOfBounds(t *testing.T) {
+	header := []interface{}{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
+	repo := newMemRepo(map[string][][]interface{}{"DIF": {header}})
+	err := newTestLogicWithRepo(t, repo).Reject(5)
+	if err == nil {
+		t.Error("expected error for out-of-bounds index")
+	}
+}
+
+func TestMoveNonRecurringDifToREJ_RejectsRecurring(t *testing.T) {
+	header := []interface{}{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
+	difRow := makeRow("Alice", "BancoBR", "Corrente", "100.00", "p-1", "sim")
+	repo := newMemRepo(map[string][][]interface{}{"DIF": {header, difRow}})
+	err := newTestLogicWithRepo(t, repo).MoveNonRecurringDifToREJ(1)
+	if err == nil {
+		t.Error("expected error for recurring DIF row")
+	}
+}
+
+func TestMoveNonRecurringDifToREJ_OutOfBounds(t *testing.T) {
+	header := []interface{}{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
+	repo := newMemRepo(map[string][][]interface{}{"DIF": {header}})
+	err := newTestLogicWithRepo(t, repo).MoveNonRecurringDifToREJ(5)
+	if err == nil {
+		t.Error("expected error for out-of-bounds index")
+	}
+}
+
+func TestMoveAllNonRecurringDifToES_SkipsEmptyRows(t *testing.T) {
+	header := []interface{}{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
+	emptyRow := []interface{}{}
+	nonRecurring := makeRow("Bob", "BankX", "Poupanca", "200.00", "", "não")
+
+	repo := newMemRepo(map[string][][]interface{}{
+		"DIF": {header, emptyRow, nonRecurring},
+		"ES":  {header},
+	})
+	result, err := newTestLogicWithRepo(t, repo).MoveAllNonRecurringDifToES()
+	if err != nil {
+		t.Fatalf("MoveAllNonRecurringDifToES() error: %v", err)
+	}
+	if result.MovedToES != 1 {
+		t.Errorf("expected MovedToES=1 (empty row skipped), got %d", result.MovedToES)
+	}
+}
+
+func TestUpdateDifCategory_OutOfBounds(t *testing.T) {
+	header := []interface{}{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
+	repo := newMemRepo(map[string][][]interface{}{"HOM": {header}})
+	err := newTestLogicWithRepo(t, repo).UpdateDifCategory(5, "Alimentação")
+	if err == nil {
+		t.Error("expected error for out-of-bounds index")
+	}
+}
+
+func TestUpdateDifCategory_EmptyRow(t *testing.T) {
+	header := []interface{}{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
+	emptyRow := []interface{}{}
+	repo := newMemRepo(map[string][][]interface{}{"HOM": {header, emptyRow}})
+	err := newTestLogicWithRepo(t, repo).UpdateDifCategory(1, "Alimentação")
+	if err == nil {
+		t.Error("expected error for empty HOM row")
+	}
+}
