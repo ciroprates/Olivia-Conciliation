@@ -3,7 +3,6 @@ package sheets
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 
 	"golang.org/x/oauth2/google"
@@ -14,10 +13,12 @@ import (
 type Client struct {
 	srv           *sheets.Service
 	spreadsheetID string
+	tableIDs      map[string]string
 }
 
-func NewClient(ctx context.Context, spreadsheetID string) (*Client, error) {
-	// Look for credentials in env var or default file
+// NewClient creates a Sheets client and caches the native table ID for each sheet
+// listed in tableSheets. Fails if any sheet has zero or more than one native table.
+func NewClient(ctx context.Context, spreadsheetID string, tableSheets ...string) (*Client, error) {
 	credsPath := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
 	if credsPath == "" {
 		credsPath = "credentials.json"
@@ -32,22 +33,55 @@ func NewClient(ctx context.Context, spreadsheetID string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse client secret file to config: %v", err)
 	}
-	client := config.Client(ctx)
 
-	srv, err := sheets.NewService(ctx, option.WithHTTPClient(client))
+	c := &Client{
+		srv:           nil,
+		spreadsheetID: spreadsheetID,
+		tableIDs:      make(map[string]string),
+	}
+
+	svc, err := sheets.NewService(ctx, option.WithHTTPClient(config.Client(ctx)))
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve Sheets client: %v", err)
 	}
+	c.srv = svc
 
-	return &Client{
-		srv:           srv,
-		spreadsheetID: spreadsheetID,
-	}, nil
+	if len(tableSheets) > 0 {
+		if err := c.initTableIDs(tableSheets); err != nil {
+			return nil, err
+		}
+	}
+
+	return c, nil
+}
+
+func (c *Client) initTableIDs(sheetNames []string) error {
+	sp, err := c.srv.Spreadsheets.Get(c.spreadsheetID).Do()
+	if err != nil {
+		return fmt.Errorf("unable to get spreadsheet metadata: %v", err)
+	}
+
+	byName := make(map[string]*sheets.Sheet, len(sp.Sheets))
+	for _, s := range sp.Sheets {
+		byName[s.Properties.Title] = s
+	}
+
+	for _, name := range sheetNames {
+		s, ok := byName[name]
+		if !ok {
+			return fmt.Errorf("sheet %q not found in spreadsheet", name)
+		}
+		if len(s.Tables) != 1 {
+			return fmt.Errorf("sheet %q must have exactly one native table, found %d", name, len(s.Tables))
+		}
+		c.tableIDs[name] = s.Tables[0].TableId
+	}
+
+	return nil
 }
 
 func (c *Client) FetchRows(sheetName string) ([][]interface{}, error) {
-	readRange := sheetName // Read the whole sheet or substantial part
-	resp, err := c.srv.Spreadsheets.Values.Get(c.spreadsheetID, readRange).Do()
+	resp, err := c.srv.Spreadsheets.Values.Get(c.spreadsheetID, sheetName).Do()
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve data from sheet: %v", err)
 	}
@@ -55,7 +89,6 @@ func (c *Client) FetchRows(sheetName string) ([][]interface{}, error) {
 }
 
 func (c *Client) WriteCell(sheetName string, rowIndex int, colIndex int, value string) error {
-	// colIndex is 0-based. Sheets API uses A1 notation.
 	colLetter := ""
 	tempIdx := colIndex
 	for {
@@ -66,9 +99,7 @@ func (c *Client) WriteCell(sheetName string, rowIndex int, colIndex int, value s
 		}
 	}
 
-	// Row number is 1-based (rowIndex + 1)
 	rangeStr := fmt.Sprintf("%s!%s%d", sheetName, colLetter, rowIndex+1)
-
 	val := &sheets.ValueRange{
 		Values: [][]interface{}{{value}},
 	}
@@ -81,48 +112,45 @@ func (c *Client) WriteCell(sheetName string, rowIndex int, colIndex int, value s
 }
 
 func (c *Client) AppendRow(sheetName string, values []interface{}) error {
-	rows, err := c.FetchRows(sheetName)
+	tableID, ok := c.tableIDs[sheetName]
+	if !ok {
+		return fmt.Errorf("no native table cached for sheet %q", sheetName)
+	}
+
+	cellData := make([]*sheets.CellData, len(values))
+	for i, v := range values {
+		str := ""
+		if v != nil {
+			str = fmt.Sprintf("%v", v)
+		}
+		ev := &sheets.ExtendedValue{StringValue: &str}
+		if str == "" {
+			ev.ForceSendFields = []string{"StringValue"}
+		}
+		cellData[i] = &sheets.CellData{UserEnteredValue: ev}
+	}
+
+	req := &sheets.BatchUpdateSpreadsheetRequest{
+		Requests: []*sheets.Request{
+			{
+				AppendCells: &sheets.AppendCellsRequest{
+					TableId: tableID,
+					Rows:    []*sheets.RowData{{Values: cellData}},
+					Fields:  "userEnteredValue",
+				},
+			},
+		},
+	}
+
+	_, err := c.srv.Spreadsheets.BatchUpdate(c.spreadsheetID, req).Do()
 	if err != nil {
-		return fmt.Errorf("unable to fetch rows for append: %v", err)
+		return fmt.Errorf("unable to append row to sheet %q: %v", sheetName, err)
 	}
-	nextRow := len(rows) + 1
-	rangeStr := fmt.Sprintf("%s!A%d", sheetName, nextRow)
-	val := &sheets.ValueRange{
-		Values: [][]interface{}{values},
-	}
-	_, err = c.srv.Spreadsheets.Values.Update(c.spreadsheetID, rangeStr, val).ValueInputOption("RAW").Do()
-	return err
+	return nil
 }
 
 func (c *Client) ClearRow(sheetName string, rowIndex int) error {
-	// We clear the row content instead of deleting the dimension to preserve indices if needed,
-	// but typically "Remove a linha" means delete dimension.
-	// However, deleting dimensions shifts indices, which is dangerous for concurrent or index-based operations if not careful.
-	// The prompt says "Remove a linha original da DIF".
-	// Safest for concurrency/consistency without re-fetching is usually clearing content,
-	// but if we want to "Remove", we should use batchUpdate with simple DeleteDimension.
-	// Let's implement DeleteRow, but be aware of index shifting.
-	// Deleting dimensions shifts indices and requires obtaining the sheet ID; to keep behavior safe
-	// for current usage we clear the row contents instead of deleting the row.
-
 	rangeStr := fmt.Sprintf("%s!A%d:ZZ%d", sheetName, rowIndex+1, rowIndex+1)
 	_, err := c.srv.Spreadsheets.Values.Clear(c.spreadsheetID, rangeStr, &sheets.ClearValuesRequest{}).Do()
 	return err
-}
-
-// Helper to get SheetID would be needed for DeleteDimension.
-// Skipping for now, using Clear.
-func (c *Client) getSheetIdByName(name string) int64 {
-	// Implementation omitted for now, need another fetch.
-	sp, err := c.srv.Spreadsheets.Get(c.spreadsheetID).Do()
-	if err != nil {
-		log.Printf("Error getting spreadsheet: %v", err)
-		return 0
-	}
-	for _, s := range sp.Sheets {
-		if s.Properties.Title == name {
-			return s.Properties.SheetId
-		}
-	}
-	return 0
 }

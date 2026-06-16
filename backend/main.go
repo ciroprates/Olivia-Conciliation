@@ -42,7 +42,7 @@ func main() {
 	cfg := config.FromEnv()
 
 	// Init Sheets Client
-	client, err := sheets.NewClient(context.Background(), cfg.SpreadsheetID)
+	client, err := sheets.NewClient(context.Background(), cfg.SpreadsheetID, cfg.SheetES, cfg.SheetREJ)
 	if err != nil {
 		log.Fatalf("Failed to create sheets client: %v", err)
 	}
