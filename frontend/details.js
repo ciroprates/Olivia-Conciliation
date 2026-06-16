@@ -36,11 +36,12 @@ export const detailsModule = {
             const isSelected = this.state.selectedCandidates.has(c.rowIndex);
 
             el.innerHTML = `
-                <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="app.toggleCandidate(${c.rowIndex})">
+                <input type="checkbox" ${isSelected ? 'checked' : ''}>
                 <div class="candidate-details">
                     ${this.renderCardContent(c, true)}
                 </div>
             `;
+            el.querySelector('input[type="checkbox"]').addEventListener('change', () => this.toggleCandidate(c.rowIndex));
             candList.appendChild(el);
         });
     },
