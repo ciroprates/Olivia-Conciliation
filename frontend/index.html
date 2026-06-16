@@ -111,14 +111,14 @@
 
     <template id="view-details">
         <div class="details-view">
-            <button class="btn-back" onclick="app.navigate('queue')">← Voltar</button>
+            <button class="btn-back" id="btn-back">← Voltar</button>
 
             <div class="split-view">
                 <div class="reference-card glass-panel">
                     <h2>Referência (DIF)</h2>
                     <div id="ref-details"></div>
                     <div class="actions">
-                        <button class="btn-reject" onclick="app.rejectCurrent()">Rejeitar Referência</button>
+                        <button class="btn-reject" id="btn-reject">Rejeitar Referência</button>
                     </div>
                 </div>
 
@@ -126,7 +126,7 @@
                     <h2>Candidatas (ES)</h2>
                     <div class="candidates-list" id="candidates-list"></div>
                     <div class="actions">
-                        <button class="btn-accept" onclick="app.acceptSelection()">Aceitar Seleção</button>
+                        <button class="btn-accept" id="btn-accept-selection">Aceitar Seleção</button>
                     </div>
                 </div>
             </div>

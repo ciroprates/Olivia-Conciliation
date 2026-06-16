@@ -68,6 +68,9 @@ const app = Object.assign(
                 const template = document.getElementById('view-details').content.cloneNode(true);
                 main.innerHTML = '';
                 main.appendChild(template);
+                document.getElementById('btn-back')?.addEventListener('click', () => this.navigate('queue'));
+                document.getElementById('btn-reject')?.addEventListener('click', () => this.rejectCurrent());
+                document.getElementById('btn-accept-selection')?.addEventListener('click', () => this.acceptSelection());
                 this.renderDetails();
             }
         },
