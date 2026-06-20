@@ -53,7 +53,7 @@ services:
     image: n8nio/n8n
     restart: always
     environment:
-      WEBHOOK_URL: https://n8n.olivinha.site
+      WEBHOOK_URL: https://n8n.olivinha.online
       N8N_HOST: host.docker.internal
       GENERIC_TIMEZONE: America/Sao_Paulo
       N8N_LOG_LEVEL: debug
@@ -76,7 +76,7 @@ services:
     restart: always
     platform: linux/amd64
     environment:
-      WHATSAPP_HOOK_URL: https://n8n.olivinha.site/webhook/webhook
+      WHATSAPP_HOOK_URL: https://n8n.olivinha.online/webhook/webhook
       WHATSAPP_DEFAULT_ENGINE: GOWS
       WHATSAPP_HOOK_EVENTS: message
     volumes:

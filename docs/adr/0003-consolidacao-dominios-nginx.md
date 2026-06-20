@@ -8,11 +8,11 @@ A decisão adotada foi consolidar tudo em `console.olivinha.site`, roteando `/ap
 
 | Domínio | Serviço |
 |---|---|
-| `console.olivinha.site` | Frontend + backend API (`/api/`) + execuções Pluggy (`/executions/`) |
-| `n8n.olivinha.site` | Painel do n8n (workflow automation) |
-| `waha.olivinha.site` | WAHA (WhatsApp API bridge) |
+| `console.olivinha.online` | Frontend + backend API (`/api/`) + execuções Pluggy (`/executions/`) |
+| `n8n.olivinha.online` | Painel do n8n (workflow automation) |
+| `waha.olivinha.online` | WAHA (WhatsApp API bridge) |
 
-Todos os domínios compartilham o mesmo certificado Let's Encrypt (`olivinha.site-0001`), gerenciado por `scripts/setup-ssl.sh`.
+Todos os domínios compartilham o mesmo certificado Let's Encrypt (`olivinha.online`), gerenciado por `scripts/setup-ssl.sh`. O domínio anterior `olivinha.site` foi abandonado e substituído por corte imediato em 2026-06-19.
 
 ## Alternativa considerada
 

@@ -48,9 +48,9 @@ ADMIN_USER=$ADMIN_USER
 ADMIN_PASS=$ADMIN_PASS
 JWT_SECRET=$JWT_SECRET
 BANKS_JSON=$BANKS_JSON_CLEAN
-COOKIE_DOMAIN=console.olivinha.site
+COOKIE_DOMAIN=console.olivinha.online
 COOKIE_SECURE=true
-APP_ORIGIN=https://console.olivinha.site
+APP_ORIGIN=https://console.olivinha.online
 EOF
 
 # 4. Login no ECR
@@ -59,21 +59,34 @@ aws ecr get-login-password --region "$AWS_REGION" | sudo docker login --username
     echo "Aviso: Falha no login do ECR. Continuando..."
 }
 
-# 5. Atualização dos containers
+# 5. Bootstrap SSL se certificado não existir
+CERT_PATH="$APP_DIR/certbot/conf/live/olivinha.online/fullchain.pem"
+if [ ! -f "$CERT_PATH" ]; then
+    echo "Certificado olivinha.online não encontrado. Criando placeholder e emitindo certificado real..."
+    mkdir -p "$(dirname "$CERT_PATH")"
+    openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+        -keyout "$(dirname "$CERT_PATH")/privkey.pem" \
+        -out "$CERT_PATH" \
+        -subj '/CN=localhost' 2>/dev/null
+    sudo docker compose up -d nginx
+    bash "$APP_DIR/scripts/setup-ssl.sh"
+fi
+
+# 6. Atualização dos containers
 echo "Puxando novas imagens e reiniciando containers..."
 sudo docker compose pull
 sudo docker compose up -d
 
-# 5.1 Recarrega o Nginx para atualizar resolução de upstreams após recriação de containers
+# 6.1 Recarrega o Nginx para atualizar resolução de upstreams após recriação de containers
 echo "Recarregando Nginx..."
 sudo docker compose exec -T nginx nginx -s reload || sudo docker compose restart nginx
 
-# 6. Configura renovação automática de certificado SSL (idempotente)
+# 7. Configura renovação automática de certificado SSL (idempotente)
 echo "Configurando cron de renovação SSL..."
 CERTBOT_CRON="0 0,12 * * * cd $APP_DIR && sudo docker compose run --rm certbot renew >> /var/log/certbot-renew.log 2>&1 && sudo docker compose exec -T nginx nginx -s reload >> /var/log/certbot-renew.log 2>&1"
 (sudo crontab -l 2>/dev/null | grep -v "certbot renew"; echo "$CERTBOT_CRON") | sudo crontab -
 
-# 7. Renova certificado SSL imediatamente
+# 8. Renova certificado SSL imediatamente
 echo "Renovando certificado SSL..."
 echo "--- $(date) ---" >> /var/log/certbot-renew.log
 sudo docker compose run --rm certbot renew >> /var/log/certbot-renew.log 2>&1 || true
