@@ -69,7 +69,7 @@ if [ ! -f "$CERT_PATH" ]; then
         -out "$CERT_PATH" \
         -subj '/CN=localhost' 2>/dev/null
     sudo docker compose up -d nginx
-    bash "$APP_DIR/scripts/setup-ssl.sh"
+    bash "$APP_DIR/scripts/setup-ssl.sh" --force
 fi
 
 # 6. Atualização dos containers
