@@ -2,7 +2,7 @@
 set -euo pipefail
 
 CERT_NAME="olivinha.site-0001"
-DOMAINS=("console.olivinha.site" "bff.olivinha.site" "api.olivinha.site" "n8n.olivinha.site" "waha.olivinha.site")
+DOMAINS=("console.olivinha.site" "n8n.olivinha.site" "waha.olivinha.site")
 EMAIL="vendas@p7v.com.br"
 
 echo "[1/5] Subindo nginx (HTTP) para servir challenges..."
