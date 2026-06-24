@@ -3,6 +3,7 @@ services:
   backend:
     build: .
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:backend-latest
+    restart: always
     env_file:
       - .env
     environment:
@@ -13,11 +14,13 @@ services:
   frontend:
     build: ./frontend
     image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:frontend-latest
+    restart: always
     depends_on:
       - backend
 
   olivia-api:
     image: ${ECR_REGISTRY}/olivia-api:latest
+    restart: always
     env_file:
       - .env
     environment:
