@@ -1,5 +1,7 @@
 # CloudFront + S3 como fallback de indisponibilidade com start sob demanda
 
+> **Atualização 2026-06-23:** o início automático às 06:00 BRT foi removido — o início passou a ser **exclusivamente sob demanda**. Ver a seção "Atualização (2026-06-23)" no fim deste documento.
+
 ## Contexto
 
 A EC2 é parada automaticamente à meia-noite BRT e iniciada às 06:00 BRT para reduzir custos. Fora dessa janela, quem tentar acessar qualquer subdomínio da aplicação (`console`, `n8n`, `waha`) receberia um timeout ou connection refused.
@@ -45,3 +47,15 @@ Recursos provisionados (conta `683684736241`, região `us-east-1`):
 - O token de start (`START_TOKEN`) é uma variável de ambiente no Lambda — se vazar, o pior caso é alguém ligar a EC2 repetidamente. Risco aceito dado o blast radius pequeno.
 - Startup da EC2 leva ~60s até os containers Docker estarem prontos; o polling elimina o risco de redirecionar antes da app estar pronta.
 - Serviços `n8n` e `waha` ficam indisponíveis entre meia-noite e 06:00 BRT. Mensagens WhatsApp recebidas nesse período são perdidas silenciosamente — perda aceitável enquanto o chatbot (#22) não estiver em produção.
+
+## Atualização (2026-06-23) — início automático removido
+
+O início automático às 06:00 BRT foi **descartado**. A regra EventBridge `olivia-ec2-start` (`cron(0 9 * * ? *)`, alvo `olivia-ec2-scheduler` com input `{"action":"start"}`) foi **desabilitada** — não deletada, para rollback trivial via `aws events enable-rule --name olivia-ec2-start`. Planeja-se deletá-la após ~1 semana de validação.
+
+A partir de agora o início é **exclusivamente sob demanda**: a EC2 só liga quando alguém abre um subdomínio, digita a senha e aciona o botão "Iniciar" na página de fallback (API Gateway → `olivia-ec2-scheduler`, ramo do token). O desligamento às 00:00 BRT (regra `olivia-ec2-stop`, `cron(0 3 * * ? *)`, input `{"action":"stop"}`) permanece **inalterado**.
+
+**Motivo:** há um único usuário, o boot de ~60s no primeiro acesso do dia é aceitável, e não existe nenhum workflow no n8n que dependa do warm-up matinal. O job diário de atualização de Items do Pluggy (`daily-update-items-schedule` → Lambda `update-items-function`, 03:00 BRT) é **cloud-to-cloud** (chama a API do Pluggy diretamente, não toca a EC2), então é indiferente ao estado da máquina.
+
+**Consequência revista:** a janela de indisponibilidade de `n8n`/`waha` deixa de ser "meia-noite–06:00 BRT" e passa a ser "da meia-noite até a primeira visita do dia" — potencialmente o dia inteiro, se ninguém acessar.
+
+**⚠️ Pré-requisito não satisfeito — start sob demanda ainda inativo (2026-07-09):** o início sob demanda descrito acima depende do **cutover de DNS** dos subdomínios para o CloudFront, que **ainda não foi feito**. Enquanto o DNS apontar direto para o EIP, a página de fallback (servida pelo CloudFront apenas nos erros 502/504) não é alcançável — logo, com o auto-start desabilitado, a **única** forma de ligar a EC2 é manual (`aws ec2 start-instances`). Um incidente em 2026-07-09 (EC2 parada ~2 semanas, console inacessível) expôs exatamente isso. O cutover destrava simultaneamente o start sob demanda e o HTTPS na borda (cert ACM). **Até o cutover, o modelo "sob demanda" está efetivamente inativo e o start permanece manual.**
