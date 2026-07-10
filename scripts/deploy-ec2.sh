@@ -73,6 +73,16 @@ if [ ! -f "$CERT_PATH" ]; then
 fi
 
 # 6. Atualização dos containers
+# Limpa imagens/camadas não usadas ANTES do pull, para evitar disco cheio:
+# o prune antigo só rodava no fim do script; quando um deploy falhava antes
+# disso, as imagens antigas acumulavam e enchiam o disco, fazendo o
+# `docker compose pull` seguinte morrer no meio da extração ("no space left on
+# device") — e, com `set -e`, isso derrubava o deploy inteiro.
+# Containers em execução e volumes nomeados NÃO são afetados.
+echo "Limpando imagens/camadas não usadas antes do pull..."
+sudo docker image prune -af || true
+sudo docker builder prune -f || true
+
 echo "Puxando novas imagens e reiniciando containers..."
 sudo docker compose pull
 sudo docker compose up -d
