@@ -1,32 +1,36 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Este arquivo orienta o Claude Code (claude.ai/code) ao trabalhar neste repositório.
 
-## Commands
+> **Vocabulário de domínio:** veja [`CONTEXT.md`](CONTEXT.md) — leia antes de mexer na lógica de negócio (define Transação, HOM, DIF, ES, REJ, Parcelada, Candidata, Conciliação, etc.).
+>
+> **Decisões de arquitetura:** veja [`docs/adr/`](docs/adr/).
+
+## Comandos
 
 ### Backend (Go)
 
 ```bash
-# Run locally (requires .env configured)
+# Rodar localmente (requer .env configurado)
 go run backend/main.go
 
-# Build binary
+# Compilar o binário
 go build -o olivia-backend ./backend
 
-# Run tests
+# Rodar os testes
 go test ./backend/...
 
-# Run tests for a single package
+# Rodar os testes de um único pacote
 go test ./backend/service/...
 
-# Tidy dependencies
+# Ajustar dependências
 go mod tidy
 ```
 
 ### Frontend (Vanilla JS)
 
 ```bash
-# Serve static files locally
+# Servir os arquivos estáticos localmente
 cd frontend
 python3 -m http.server 3001
 ```
@@ -34,108 +38,111 @@ python3 -m http.server 3001
 ### Docker
 
 ```bash
-# Full stack (recommended)
+# Stack completa (recomendado)
 cp .env.example .env
-# fill in required values
+# preencha os valores obrigatórios
 docker compose up -d
 
-# Rebuild and restart a single service
+# Recompilar e reiniciar um único serviço
 docker compose up -d --build backend
 ```
 
-## Architecture
+## Arquitetura
 
-This is a financial reconciliation system between Google Sheets and the Pluggy API. It bridges installment transactions (from Pluggy, stored in the DIF sheet) with recorded transactions (in the ES sheet).
+Sistema de conciliação financeira entre o Google Sheets e a API do Pluggy. O `olivia-api` importa transações do Pluggy para a aba HOM; uma fórmula nativa do Sheets gera a aba DIF com o que ainda não tem correspondência na ES. O backend Go lê a DIF e expõe dois fluxos: conciliação de transações **parceladas** (casar com candidatas na ES) e revisão manual de transações **não-parceladas** (mover direto para ES ou REJ).
 
-### Services (docker-compose)
+**Fluxo dos dados:** Pluggy → `olivia-api` → HOM (import bruto, volátil) → fórmula do Sheets → DIF → `backend` (Go) → `sheets.Client` → Google Sheets API.
 
-| Service | Description |
+### Serviços (docker-compose)
+
+| Serviço | Descrição |
 |---|---|
-| `backend` | Go HTTP API, port 8080 |
-| `frontend` | Nginx serving static Vanilla JS |
-| `nginx` | Reverse proxy (ports 80/443), routes `/api` and `/executions` |
-| `olivia-api` | External service (ECR image) — Pluggy integration |
-| `n8n` | Workflow automation |
-| `waha` | WhatsApp API bridge |
+| `backend` | API HTTP em Go, porta 8080 |
+| `frontend` | Nginx servindo o Vanilla JS estático |
+| `nginx` | Proxy reverso (portas 80/443), roteia `/api` e `/executions` |
+| `olivia-api` | Serviço externo (imagem ECR) — integração com o Pluggy |
+| `n8n` | Automação de workflows |
+| `waha` | Ponte para a API do WhatsApp |
 
-### Backend structure (`olivia-conciliation` Go module)
+### Estrutura do backend (módulo Go `olivia-conciliation`)
 
 ```
 backend/
-  main.go              # HTTP server, route registration, startup validation
-  models/models.go     # Domain types and spreadsheet column index constants
-  sheets/client.go     # Google Sheets API client (FetchRows, WriteCell, AppendRow, ClearRow)
+  main.go              # Servidor HTTP, registro de rotas, validação de startup
+  models/models.go     # Tipos de domínio e constantes de índice de coluna da planilha
+  sheets/client.go     # Cliente da API do Google Sheets (FetchRows, WriteCell, AppendRow, ClearRow)
   handlers/auth.go     # Login, Logout, Verify, AuthMiddleware (JWT + CSRF)
-  handlers/api.go      # REST handlers for conciliation and DIF operations
-  service/conciliation.go  # Business logic: matching, accepting, rejecting, moving rows
+  handlers/api.go      # Handlers REST para conciliação e operações da DIF
+  service/conciliation.go  # Lógica de negócio: matching, aceitar, rejeitar, mover linhas
 ```
 
-**Request flow:** `nginx` -> `backend` (Go) -> `sheets.Client` (Google Sheets API)
+### Modelo da planilha
 
-### Spreadsheet model
+Quatro abas, configuráveis via env vars. O fluxo de import (Pluggy → HOM → fórmula → DIF) está descrito em **Arquitetura**, acima.
 
-Four sheets, configurable via env vars:
-- **ES** (`SHEET_ES`, default `"Entradas e Saídas"`): Confirmed transactions. Pending ones have `Recorrente=true` and no `IdParcela`, or `IdParcela` prefixed with `synthetic`.
-- **DIF** (`SHEET_DIF`, default `"Diferença"`): Installment transactions from Pluggy needing reconciliation. Recurring rows are candidates for matching against ES.
-- **REJ** (`SHEET_REJ`, default `"Rejeitados"`): Rejected transactions (audit trail).
-- **HOM** (`SHEET_HOM`, default `"Homologação"`): Used for editing category and date on non-recurring DIF rows. **Not validated at startup** — missing `SHEET_HOM` will only fail at runtime when those endpoints are called.
+- **ES** (`SHEET_ES`, padrão `"Entradas e Saídas"`): Transações confirmadas. As pendentes têm `Recorrente=true` e sem `IdParcela`, ou `IdParcela` prefixado por `synthetic`.
+- **DIF** (`SHEET_DIF`, padrão `"Diferença"`): Gerada por fórmula a partir da HOM — transações do Pluggy ainda sem correspondência na ES. As linhas parceladas (`Recorrente=true`) são candidatas a matching contra a ES.
+- **REJ** (`SHEET_REJ`, padrão `"Rejeitados"`): Transações rejeitadas (trilha de auditoria).
+- **HOM** (`SHEET_HOM`, padrão `"Homologação"`): Import bruto e volátil do Pluggy (apagado e reescrito a cada processamento). É a fonte que a fórmula da DIF lê, e onde se edita categoria e data das linhas não-parceladas antes de movê-las. **Não validada no startup** — um `SHEET_HOM` ausente só falha em runtime, quando esses endpoints são chamados.
 
-Column layout (0-based index in row slice): B=Data, C=Descricao, D=Valor, E=Categoria, F=Dono, G=Banco, H=Conta, I=Recorrente, J=IdParcela.
+Layout de colunas (índices conforme `backend/models/models.go`; o slice da linha é 0-based, com a coluna A no índice 0): B=Data (1), C=Descricao (2), D=Valor (3), E=Categoria (4), F=Dono (5), G=Banco (6), H=Conta (7), I=Recorrente (8), J=IdParcela (9).
 
-### Conciliation workflows
+### Fluxos de conciliação
 
-There are two distinct workflows, one per transaction type in DIF:
+Dois fluxos distintos, um por tipo de transação na DIF. **Nota de vocabulário:** o glossário (`CONTEXT.md`) chama essas linhas de "Transação Parcelada" / "Não-Parcelada"; o código e as rotas usam *recurring* / *non-recurring* (o flag é a coluna `Recorrente`).
 
-**Recurring DIF rows** (conciliation flow):
-- `GET /api/conciliations` — list recurring DIF rows with candidate count
-- `GET /api/conciliations/{rowIndex}` — get details with matching ES candidates
-- `POST /api/conciliations/{rowIndex}/accept` — writes DIF's `IdParcela` into matched ES row's `ColumnIdParcela`
-- `POST /api/conciliations/{rowIndex}/reject` — appends DIF row to REJ, then clears DIF row
+**Linhas parceladas da DIF** (`Recorrente=true`; *recurring* no código) — fluxo de conciliação:
+- `GET /api/conciliations` — lista linhas parceladas da DIF com contagem de candidatas
+- `GET /api/conciliations/{rowIndex}` — detalhes com as candidatas da ES
+- `POST /api/conciliations/{rowIndex}/accept` — escreve o `IdParcela` da DIF na coluna `ColumnIdParcela` da linha casada na ES
+- `POST /api/conciliations/{rowIndex}/reject` — anexa a linha da DIF na REJ e limpa a linha na DIF
 
-**Non-recurring DIF rows** (manual review flow):
-- `GET /api/dif/non-recurring` — list non-recurring DIF rows
-- `POST /api/dif/non-recurring/{rowIndex}/move-to-es` — moves row from DIF to ES
-- `POST /api/dif/non-recurring/{rowIndex}/move-to-rej` — moves row from DIF to REJ
-- `POST /api/dif/non-recurring/move-all-to-es` — bulk move all non-recurring DIF rows to ES
-- `PATCH /api/dif/non-recurring/{rowIndex}/category` — updates category in **SHEET_HOM** (not SHEET_DIF)
-- `PATCH /api/dif/non-recurring/{rowIndex}/date` — updates date in **SHEET_HOM** (not SHEET_DIF)
+**Linhas não-parceladas da DIF** (`Recorrente=false`; *non-recurring* no código) — fluxo de revisão manual:
+- `GET /api/dif/non-recurring` — lista as linhas não-parceladas da DIF
+- `POST /api/dif/non-recurring/{rowIndex}/move-to-es` — move a linha da DIF para a ES
+- `POST /api/dif/non-recurring/{rowIndex}/move-to-rej` — move a linha da DIF para a REJ
+- `POST /api/dif/non-recurring/move-all-to-es` — move em lote todas as linhas não-parceladas da DIF para a ES
+- `PATCH /api/dif/non-recurring/{rowIndex}/category` — atualiza a categoria na **SHEET_HOM** (não na SHEET_DIF)
+- `PATCH /api/dif/non-recurring/{rowIndex}/date` — atualiza a data na **SHEET_HOM** (não na SHEET_DIF)
 
-**Important:** The `{rowIndex}` in all API paths is the **0-based row index in the sheet array** (row 0 is the header, data starts at 1). It is not a sequential or opaque ID.
+Os PATCH escrevem na HOM (não na DIF) porque a DIF é gerada por fórmula: editar a HOM faz o Sheets recalcular a DIF.
 
-### Conciliation matching logic
+**Importante:** o `{rowIndex}` em todas as rotas é o **índice 0-based da linha no array da aba** (a linha 0 é o cabeçalho, os dados começam em 1). Não é um ID sequencial nem opaco.
 
-Matching between DIF (reference) and ES (candidates) requires:
-1. Same `Dono`, `Banco`, and `Conta`
+### Lógica de matching da conciliação
+
+O matching entre a DIF (referência) e a ES (candidatas) exige:
+1. Mesmo `Dono`, `Banco` e `Conta`
 2. `abs(DIF.Valor - ES.Valor) < 5.00`
 
-**Accept**: writes DIF's `IdParcela` into the matched ES row's `ColumnIdParcela` column.
-**Reject**: appends DIF row to REJ, then clears the DIF row (row content cleared, not deleted, to preserve row indices).
+**Aceitar**: escreve o `IdParcela` da DIF na coluna `ColumnIdParcela` da linha casada na ES.
+**Rejeitar**: anexa a linha da DIF na REJ e limpa a linha da DIF (conteúdo limpo, linha não deletada, para preservar os índices de linha).
 
-### Google Sheets credentials
+### Credenciais do Google Sheets
 
-The sheets client reads a service account key file. It checks `GOOGLE_APPLICATION_CREDENTIALS` env var first; if unset, falls back to `credentials.json` in the working directory. In production, the deploy script generates this as `key.json` and sets the env var accordingly.
+O cliente do Sheets lê um arquivo de chave de service account. Verifica primeiro a env var `GOOGLE_APPLICATION_CREDENTIALS`; se ausente, usa `credentials.json` no diretório de trabalho. Em produção, o script de deploy gera esse arquivo como `key.json` e ajusta a env var de acordo.
 
-### Authentication
+### Autenticação
 
-- Single admin user (`ADMIN_USER`/`ADMIN_PASS` from env)
-- JWT stored in `HttpOnly` cookie `olivia_session` (24h expiry)
-- CSRF double-submit pattern: cookie `olivia_csrf` + header `X-CSRF-Token`, required for POST/PUT/PATCH/DELETE
-- Origin/Referer validation against `APP_ORIGIN`
+- Usuário admin único (`ADMIN_USER`/`ADMIN_PASS` do env)
+- JWT em cookie `HttpOnly` `olivia_session` (expira em 24h)
+- Padrão CSRF double-submit: cookie `olivia_csrf` + header `X-CSRF-Token`, obrigatório em POST/PUT/PATCH/DELETE
+- Validação de Origin/Referer contra `APP_ORIGIN`
 
-### Required env vars (validated at startup)
+### Env vars obrigatórias (validadas no startup)
 
-`SHEET_SPREADSHEET_ID`, `ADMIN_USER`, `ADMIN_PASS`, `JWT_SECRET`, `SHEET_ES`, `SHEET_DIF`, `SHEET_REJ`. Note: `SHEET_HOM` and `APP_ORIGIN` are **not** in the startup check.
+`SHEET_SPREADSHEET_ID`, `ADMIN_USER`, `ADMIN_PASS`, `JWT_SECRET`, `SHEET_ES`, `SHEET_DIF`, `SHEET_REJ`. Obs: `SHEET_HOM` e `APP_ORIGIN` **não** estão na checagem de startup.
 
-### Local dev vs production differences
+### Dev local vs. produção
 
-For local dev, set in `.env`:
+Para dev local, defina no `.env`:
 ```
 APP_ORIGIN=http://localhost:3001
 COOKIE_SECURE=false
 COOKIE_DOMAIN=
 ```
 
-For frontend local dev, hardcode in `frontend/app.js`:
+Para o dev local do frontend, fixe no `frontend/app.js`:
 ```js
 const API_URL = 'http://localhost:8080/api';
 const EXECUTION_API_URL = 'http://localhost:3000/v1/executions';
@@ -143,7 +150,7 @@ const EXECUTION_API_URL = 'http://localhost:3000/v1/executions';
 
 ### CI/CD
 
-Push to `main` triggers `.github/workflows/ecr-push.yml`:
-1. Builds and pushes `backend-latest` and `frontend-latest` Docker images to AWS ECR
-2. Deploys to EC2 via AWS SSM (no SSH), running `scripts/deploy-ec2.sh`
-3. The deploy script generates `key.json` and `.env` on the EC2, then runs `docker compose pull && docker compose up -d`
+Push para `main` dispara `.github/workflows/ecr-push.yml`:
+1. Compila e publica as imagens Docker `backend-latest` e `frontend-latest` no AWS ECR
+2. Faz deploy na EC2 via AWS SSM (sem SSH), rodando `scripts/deploy-ec2.sh`
+3. O script de deploy gera `key.json` e `.env` na EC2 e roda `docker compose pull && docker compose up -d`

@@ -4,6 +4,12 @@ Sistema pessoal de conciliação financeira entre transações parceladas import
 
 O problema: a cada importação do Pluggy chegam parcelas de cartão que precisam ser vinculadas a lançamentos já registrados na planilha — seja por entrada manual do usuário, seja por parcelas sintéticas geradas em importações anteriores. O Olivia cruza os dois lados, exibe os candidatos a conciliação e deixa o usuário aceitar ou rejeitar cada vínculo.
 
+## Documentação
+
+- [`CONTEXT.md`](CONTEXT.md) — glossário de domínio (Transação, HOM, DIF, ES, REJ, Conciliação…)
+- [`docs/adr/`](docs/adr/) — decisões de arquitetura (ADRs)
+- [`CLAUDE.md`](CLAUDE.md) — guia técnico do repositório (comandos, arquitetura, endpoints)
+
 ## Stack
 
 | Camada | Tecnologia |
