@@ -33,6 +33,8 @@ Recursos provisionados (conta `683684736241`, região `us-east-1`):
 | CloudFront `n8n.olivinha.online` | `E3016IOEYUMT34` → `d2iznjdnpgpn39.cloudfront.net` |
 | CloudFront `waha.olivinha.online` | `E2G767BCSY2JB0` → `djh6cxmumjp5e.cloudfront.net` |
 
+> **Código-fonte da página:** versionado em `infra/fallback/index.html`; publicação via `scripts/deploy-fallback.sh`. Operacional em [`infra/fallback/README.md`](../../infra/fallback/README.md).
+
 ## Alternativas consideradas
 
 - **Servidor sempre ligado para servir a página**: derrota o propósito de reduzir custos.
