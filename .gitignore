@@ -5,6 +5,9 @@
 # Logs
 *.log
 
+# Go coverage
+coverage.out
+
 # OS / editor
 .DS_Store
 .gocache

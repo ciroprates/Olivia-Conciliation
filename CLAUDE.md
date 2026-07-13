@@ -102,10 +102,12 @@ Dois fluxos distintos, um por tipo de transação na DIF. **Nota de vocabulário
 - `POST /api/dif/non-recurring/{rowIndex}/move-to-es` — move a linha da DIF para a ES
 - `POST /api/dif/non-recurring/{rowIndex}/move-to-rej` — move a linha da DIF para a REJ
 - `POST /api/dif/non-recurring/move-all-to-es` — move em lote todas as linhas não-parceladas da DIF para a ES
-- `PATCH /api/dif/non-recurring/{rowIndex}/category` — atualiza a categoria na **SHEET_HOM** (não na SHEET_DIF)
-- `PATCH /api/dif/non-recurring/{rowIndex}/date` — atualiza a data na **SHEET_HOM** (não na SHEET_DIF)
+- `PATCH /api/dif/non-recurring/category` — atualiza a categoria na **SHEET_HOM** (não na SHEET_DIF); corpo `{ idParcela, categoria }`
+- `PATCH /api/dif/non-recurring/date` — atualiza a data na **SHEET_HOM** (não na SHEET_DIF); corpo `{ idParcela, data }`
 
 Os PATCH escrevem na HOM (não na DIF) porque a DIF é gerada por fórmula: editar a HOM faz o Sheets recalcular a DIF.
+
+Diferente dos endpoints de `move`/`reject`, os dois PATCH **endereçam por `IdParcela`** (identidade estável da transação), não pelo `{rowIndex}` — o índice da DIF não bate com o da HOM, que é gerada por `FILTER`. O backend localiza na HOM a linha com o `IdParcela` recebido; se ela não existir mais, devolve `404`. Ver [`docs/adr/0004`](docs/adr/0004-edicao-hom-enderecada-por-idparcela.md) para a decisão e a assimetria consciente com `move`/`reject`.
 
 **Importante:** o `{rowIndex}` em todas as rotas é o **índice 0-based da linha no array da aba** (a linha 0 é o cabeçalho, os dados começam em 1). Não é um ID sequencial nem opaco.
 

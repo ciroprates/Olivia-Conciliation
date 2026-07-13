@@ -66,11 +66,13 @@ type NonRecurringDifSummary struct {
 }
 
 type UpdateCategoryRequest struct {
+	IdParcela string `json:"idParcela"`
 	Categoria string `json:"categoria"`
 }
 
 type UpdateDateRequest struct {
-	Data string `json:"data"`
+	IdParcela string `json:"idParcela"`
+	Data      string `json:"data"`
 }
 
 type NonRecurringBulkActionResult struct {

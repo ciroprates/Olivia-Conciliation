@@ -17,7 +17,11 @@ type fakeRepo struct {
 	sheets   map[string][][]interface{}
 	appended map[string][][]interface{}
 	cleared  map[string][]int
-	written  []struct{ sheet string; row, col int; value string }
+	written  []struct {
+		sheet    string
+		row, col int
+		value    string
+	}
 }
 
 func newFakeRepo(sheets map[string][][]interface{}) *fakeRepo {
@@ -32,7 +36,11 @@ func (f *fakeRepo) FetchRows(sheet string) ([][]interface{}, error) {
 	return f.sheets[sheet], nil
 }
 func (f *fakeRepo) WriteCell(sheet string, row, col int, value string) error {
-	f.written = append(f.written, struct{ sheet string; row, col int; value string }{sheet, row, col, value})
+	f.written = append(f.written, struct {
+		sheet    string
+		row, col int
+		value    string
+	}{sheet, row, col, value})
 	return nil
 }
 func (f *fakeRepo) AppendRow(sheet string, values []interface{}) error {
@@ -262,11 +270,11 @@ func TestMoveAllNonRecurringDifToES_Returns200(t *testing.T) {
 
 func TestUpdateNonRecurringDifCategory_Returns200(t *testing.T) {
 	repo := newFakeRepo(map[string][][]interface{}{
-		"HOM": {apiHeader, apiRow("Bob", "BankX", "Poupanca", "200.00", "", "não")},
+		"HOM": {apiHeader, apiRow("Bob", "BankX", "Poupanca", "200.00", "parcela-7", "não")},
 	})
 	h := newAPIHandler(repo)
-	body := strings.NewReader(`{"categoria":"Alimentação"}`)
-	r := httptest.NewRequest(http.MethodPatch, "/api/dif/non-recurring/1/category", body)
+	body := strings.NewReader(`{"idParcela":"parcela-7","categoria":"Alimentação"}`)
+	r := httptest.NewRequest(http.MethodPatch, "/api/dif/non-recurring/category", body)
 	w := httptest.NewRecorder()
 
 	h.UpdateNonRecurringDifCategory(w, r)
@@ -274,19 +282,87 @@ func TestUpdateNonRecurringDifCategory_Returns200(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
+	if len(repo.written) != 1 || repo.written[0].sheet != "HOM" ||
+		repo.written[0].col != models.ColumnCategoria || repo.written[0].value != "Alimentação" {
+		t.Errorf("unexpected WriteCell: %+v", repo.written)
+	}
+}
+
+func TestUpdateNonRecurringDifCategory_NotInHOM_Returns404(t *testing.T) {
+	repo := newFakeRepo(map[string][][]interface{}{
+		"HOM": {apiHeader, apiRow("Bob", "BankX", "Poupanca", "200.00", "parcela-7", "não")},
+	})
+	h := newAPIHandler(repo)
+	body := strings.NewReader(`{"idParcela":"inexistente","categoria":"Alimentação"}`)
+	r := httptest.NewRequest(http.MethodPatch, "/api/dif/non-recurring/category", body)
+	w := httptest.NewRecorder()
+
+	h.UpdateNonRecurringDifCategory(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestUpdateNonRecurringDifCategory_InvalidJSON_Returns400(t *testing.T) {
+	repo := newFakeRepo(map[string][][]interface{}{})
+	h := newAPIHandler(repo)
+	body := strings.NewReader(`{not json`)
+	r := httptest.NewRequest(http.MethodPatch, "/api/dif/non-recurring/category", body)
+	w := httptest.NewRecorder()
+
+	h.UpdateNonRecurringDifCategory(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestUpdateNonRecurringDifCategory_MethodNotAllowed(t *testing.T) {
+	h := newAPIHandler(newFakeRepo(map[string][][]interface{}{}))
+	r := httptest.NewRequest(http.MethodPost, "/api/dif/non-recurring/category", nil)
+	w := httptest.NewRecorder()
+
+	h.UpdateNonRecurringDifCategory(w, r)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", w.Code)
+	}
 }
 
 func TestUpdateNonRecurringDifDate_Returns200(t *testing.T) {
-	repo := newFakeRepo(map[string][][]interface{}{})
+	repo := newFakeRepo(map[string][][]interface{}{
+		"HOM": {apiHeader, apiRow("Bob", "BankX", "Poupanca", "200.00", "parcela-7", "não")},
+	})
 	h := newAPIHandler(repo)
-	body := strings.NewReader(`{"data":"2026-06-15"}`)
-	r := httptest.NewRequest(http.MethodPatch, "/api/dif/non-recurring/1/date", body)
+	body := strings.NewReader(`{"idParcela":"parcela-7","data":"2026-06-15"}`)
+	r := httptest.NewRequest(http.MethodPatch, "/api/dif/non-recurring/date", body)
 	w := httptest.NewRecorder()
 
 	h.UpdateNonRecurringDifDate(w, r)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(repo.written) != 1 || repo.written[0].sheet != "HOM" ||
+		repo.written[0].col != models.ColumnData || repo.written[0].value != "2026-06-15" {
+		t.Errorf("unexpected WriteCell: %+v", repo.written)
+	}
+}
+
+func TestUpdateNonRecurringDifDate_NotInHOM_Returns404(t *testing.T) {
+	repo := newFakeRepo(map[string][][]interface{}{
+		"HOM": {apiHeader, apiRow("Bob", "BankX", "Poupanca", "200.00", "parcela-7", "não")},
+	})
+	h := newAPIHandler(repo)
+	body := strings.NewReader(`{"idParcela":"inexistente","data":"2026-06-15"}`)
+	r := httptest.NewRequest(http.MethodPatch, "/api/dif/non-recurring/date", body)
+	w := httptest.NewRecorder()
+
+	h.UpdateNonRecurringDifDate(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
