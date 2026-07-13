@@ -21,17 +21,27 @@ Este README é só o operacional do artefato.
 - **`LAMBDA_URL`** — endpoint do API Gateway (`kebjn6uy6l…execute-api…`). O botão
   "Iniciar" faz `POST {action:'start', token}`; a Lambda `olivia-ec2-scheduler`
   valida o token e chama `ec2:StartInstances`. O token **não** fica na página.
-- **`poll()`** — depois do start, faz `HEAD` no próprio subdomínio a cada 5s e
-  redireciona quando a resposta for **`status < 500`**.
+- **`poll()`** — depois do start, faz `GET` no próprio subdomínio a cada 5s e
+  redireciona quando a resposta **deixa de ser esta página** (ausência do
+  marcador). Detecta por conteúdo, **não** por status code — ver o gotcha abaixo.
+- **`FALLBACK_MARKER`** / `<meta name="olivia-fallback-page">` — a marca que
+  identifica esta página. O `poll()` redireciona quando ela some da resposta (#40).
 
-## Gotcha importante: o limiar `< 500` depende do `restart: always`
+## Gotcha importante: o redirect depende do app **realmente subir** (`restart: always`)
 
-O redirect só dispara com `status < 500`. Um **502** (nginx de pé, mas containers
-`backend`/`frontend`/`olivia-api` fora) é `>= 500` → o polling **fica em loop pra
-sempre** e a página nunca sai do "Iniciando…". Ou seja: para o start sob demanda
-funcionar de ponta a ponta, esses containers precisam de `restart: always` no
-`docker-compose.yml` (ver #34). Não "conserte" o limiar sem entender isso — 502
-enquanto a app sobe é esperado; o que não pode é a app **nunca** sair do 502.
+O `poll()` redireciona quando a resposta **deixa de ser esta página** — ou seja,
+quando o CloudFront para de servir o fallback (502/504) e passa a servir o app
+real. Enquanto os containers `backend`/`frontend`/`olivia-api` estiverem fora, o
+nginx devolve **502**, o CloudFront serve esta página, e o polling **espera pra
+sempre**. Para o start sob demanda fechar o ciclo, esses containers precisam de
+`restart: always` no `docker-compose.yml` (ver #34): 502 enquanto a app sobe é
+esperado; o que não pode é a app **nunca** sair do 502.
+
+> **Por que por conteúdo e não por status code (#40):** o custom error response
+> do CloudFront serve esta página com um status **próprio** (`200`, ou `503` após
+> #40) — não o 502/504 da origem. Então o status que o navegador vê **não**
+> distingue "subindo" de "pronto" (ambos podem ser 200). Por isso o `poll()`
+> detecta a troca pela ausência do marcador, e não por um limiar de status.
 
 ## Como publicar uma alteração
 
