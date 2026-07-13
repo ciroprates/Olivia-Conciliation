@@ -19,10 +19,10 @@ Aba das transações aprovadas pelo usuário. É o registro definitivo de transa
 Aba de auditoria. Recebe transações da DIF que foram rejeitadas pelo usuário.
 
 ## Transação Parcelada
-Transação com `Recorrente=true`. Representa uma parcela de compra parcelada. Na DIF: parcela importada do Pluggy. Na ES: parcela registrada pelo usuário aguardando vinculação.
+Transação com `Recorrente=true`. Representa uma parcela de compra parcelada. Na DIF: parcela importada do Pluggy. Na ES: parcela registrada pelo usuário aguardando vinculação. No código e nas rotas da API essas linhas são chamadas de *recurring* — o flag é a coluna `Recorrente`.
 
 ## Transação Não-Parcelada
-Transação com `Recorrente=false`. Não passa pelo fluxo de conciliação — é movida diretamente para ES ou REJ.
+Transação com `Recorrente=false`. Não passa pelo fluxo de conciliação — é movida diretamente para ES ou REJ. No código e nas rotas, *non-recurring* (ex.: `/api/dif/non-recurring`).
 
 ## Parcela Sintética
 Transação Parcelada gerada automaticamente na importação como placeholder para uma parcela futura ainda não cobrada pelo Pluggy. Tem `IdParcela` prefixado por `synthetic`. Aguarda conciliação com a parcela real quando ela for cobrada.
@@ -37,7 +37,9 @@ Processo de casar uma Transação Parcelada da DIF com exatamente uma Transaçã
 Transação Pendente da ES que satisfaz os critérios de correspondência com uma Transação Parcelada da DIF: mesmo Dono, Banco e Conta; diferença de Valor inferior a R$ 5,00. A tolerância existe porque o Pluggy às vezes retorna valores ligeiramente diferentes dos registrados (taxas, IOF, arredondamentos).
 
 ## IdParcela
-Identificador da parcela atribuído pelo Pluggy. Escrito na ES ao aceitar uma conciliação, vinculando a Transação Pendente à parcela importada.
+Identificador único atribuído pelo Pluggy a **toda** transação importada — não só a parcelas. Apesar do nome, sempre vem preenchido e é único em qualquer transação vinda do Pluggy (HOM e, por consequência, DIF). É a chave de identidade estável: distingue uma transação de outra independentemente da posição da linha, e é por ele que a HOM é deduplicada contra ES e REJ.
+
+Numa Transação Pendente da ES — registrada pelo usuário, não importada do Pluggy — está ausente até o Aceitar escrevê-lo, vinculando a linha da ES à transação importada.
 
 ## Aceitar (Conciliação)
 Ação que vincula uma Transação Parcelada da DIF a exatamente uma Candidata escolhida pelo usuário, escrevendo o `IdParcela` da DIF na linha correspondente da ES.
