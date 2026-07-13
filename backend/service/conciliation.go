@@ -3,10 +3,19 @@ package service
 import (
 	"errors"
 	"math"
+	"strings"
 
 	"olivia-conciliation/backend/config"
 	"olivia-conciliation/backend/models"
 )
+
+// ErrTransactionNotInHOM sinaliza que nenhuma linha da HOM tem o IdParcela pedido.
+// Ocorre só se um Processamento de Transações reescrever a HOM entre listar e salvar
+// e o Pluggy não trouxer mais aquela transação. Os handlers mapeiam para HTTP 404.
+var ErrTransactionNotInHOM = errors.New("transaction not found in HOM")
+
+// ErrEmptyIdParcela sinaliza um pedido de edição sem IdParcela. Mapeado para HTTP 400.
+var ErrEmptyIdParcela = errors.New("idParcela is required")
 
 type Logic struct {
 	repo   SheetRepository
@@ -260,25 +269,46 @@ func (l *Logic) MoveAllNonRecurringDifToES() (*models.NonRecurringBulkActionResu
 	return &models.NonRecurringBulkActionResult{MovedToES: moved}, nil
 }
 
-func (l *Logic) UpdateDifCategory(difIndex int, categoria string) error {
+// findHOMRowByIdParcela localiza na HOM a linha cujo IdParcela é igual ao pedido.
+// Como o IdParcela é único (ver CONTEXT.md), retorna no máximo uma linha.
+// Endereçar por identidade — e não pelo índice da DIF — evita o descasamento do #21:
+// a DIF é gerada por FILTER sobre a HOM, então os índices raramente coincidem.
+func (l *Logic) findHOMRowByIdParcela(idParcela string) (int, error) {
+	target := strings.TrimSpace(idParcela)
+	if target == "" {
+		return 0, ErrEmptyIdParcela
+	}
+
 	homRows, err := l.repo.FetchRows(l.cfg.SheetHOM)
+	if err != nil {
+		return 0, err
+	}
+
+	for i := 1; i < len(homRows); i++ {
+		row := homRows[i]
+		if l.parser.IsEmpty(row) {
+			continue
+		}
+		hom := l.parser.ParseTransaction(i, row, "HOM")
+		if strings.TrimSpace(hom.IdParcela) == target {
+			return i, nil
+		}
+	}
+	return 0, ErrTransactionNotInHOM
+}
+
+func (l *Logic) UpdateDifCategory(idParcela, categoria string) error {
+	rowIdx, err := l.findHOMRowByIdParcela(idParcela)
 	if err != nil {
 		return err
 	}
-	if difIndex >= len(homRows) {
-		return errors.New("index out of bounds")
-	}
-
-	if l.parser.IsEmpty(homRows[difIndex]) {
-		return errors.New("row is empty")
-	}
-
-	return l.repo.WriteCell(l.cfg.SheetHOM, difIndex, models.ColumnCategoria, categoria)
+	return l.repo.WriteCell(l.cfg.SheetHOM, rowIdx, models.ColumnCategoria, categoria)
 }
 
-func (l *Logic) UpdateDifDate(difIndex int, data string) error {
-	if difIndex < 0 {
-		return errors.New("invalid index")
+func (l *Logic) UpdateDifDate(idParcela, data string) error {
+	rowIdx, err := l.findHOMRowByIdParcela(idParcela)
+	if err != nil {
+		return err
 	}
-	return l.repo.WriteCell(l.cfg.SheetHOM, difIndex, models.ColumnData, data)
+	return l.repo.WriteCell(l.cfg.SheetHOM, rowIdx, models.ColumnData, data)
 }

@@ -185,24 +185,43 @@ export const queueModule = {
         return item.data || '';
     },
 
+    // Edições de categoria/data são endereçadas pelo IdParcela (identidade estável da
+    // transação), não pelo índice da linha da DIF — ver docs/adr/0004. O idParcela já
+    // vem no NonRecurringDifSummary, então nenhuma busca nova é necessária.
+    findNonRecurringItem(difRowIndex) {
+        return this.state.nonRecurringDif.find(item => item.difRowIndex === difRowIndex);
+    },
+
     async saveNonRecurringCategory(difRowIndex) {
         const categoria = this.state.pendingCategoryEdits[difRowIndex];
         if (typeof categoria !== 'string') return;
 
+        const item = this.findNonRecurringItem(difRowIndex);
+        if (!item || !item.idParcela) {
+            alert('Transação sem identificador — recarregue a lista antes de salvar.');
+            return;
+        }
+
         try {
-            const res = await this.authorizedFetch(`${API_URL}/dif/non-recurring/${difRowIndex}/category`, {
+            const res = await this.authorizedFetch(`${API_URL}/dif/non-recurring/category`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ categoria })
+                body: JSON.stringify({ idParcela: item.idParcela, categoria })
             });
 
+            if (res.status === 404) {
+                // A transação não está mais na HOM (reimport raro). Avisa e preserva os
+                // rascunhos das outras linhas — a lista NÃO recarrega sozinha.
+                alert('Essa transação não está mais na homologação — recarregue a lista.');
+                return;
+            }
             if (!res.ok) {
                 const txt = await res.text();
                 throw new Error(txt || 'Falha ao salvar categoria');
             }
 
-            this.state.nonRecurringDif = this.state.nonRecurringDif.map(item =>
-                item.difRowIndex === difRowIndex ? { ...item, categoria } : item
+            this.state.nonRecurringDif = this.state.nonRecurringDif.map(it =>
+                it.difRowIndex === difRowIndex ? { ...it, categoria } : it
             );
             delete this.state.pendingCategoryEdits[difRowIndex];
             this.renderQueue(document.getElementById('search')?.value || '');
@@ -216,20 +235,30 @@ export const queueModule = {
         const data = this.state.pendingDateEdits[difRowIndex];
         if (typeof data !== 'string') return;
 
+        const item = this.findNonRecurringItem(difRowIndex);
+        if (!item || !item.idParcela) {
+            alert('Transação sem identificador — recarregue a lista antes de salvar.');
+            return;
+        }
+
         try {
-            const res = await this.authorizedFetch(`${API_URL}/dif/non-recurring/${difRowIndex}/date`, {
+            const res = await this.authorizedFetch(`${API_URL}/dif/non-recurring/date`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data })
+                body: JSON.stringify({ idParcela: item.idParcela, data })
             });
 
+            if (res.status === 404) {
+                alert('Essa transação não está mais na homologação — recarregue a lista.');
+                return;
+            }
             if (!res.ok) {
                 const txt = await res.text();
                 throw new Error(txt || 'Falha ao salvar data');
             }
 
-            this.state.nonRecurringDif = this.state.nonRecurringDif.map(item =>
-                item.difRowIndex === difRowIndex ? { ...item, data } : item
+            this.state.nonRecurringDif = this.state.nonRecurringDif.map(it =>
+                it.difRowIndex === difRowIndex ? { ...it, data } : it
             );
             delete this.state.pendingDateEdits[difRowIndex];
             this.renderQueue(document.getElementById('search')?.value || '');

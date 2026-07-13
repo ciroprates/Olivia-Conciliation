@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"math"
 	"testing"
 
@@ -517,42 +518,86 @@ func TestMoveAllNonRecurringDifToES_MovesAll(t *testing.T) {
 
 // --- UpdateDifCategory / UpdateDifDate ---
 
-func TestUpdateDifCategory_WritesCell(t *testing.T) {
+// A HOM tem a linha-alvo DESLOCADA: se o serviço usasse o índice da DIF, escreveria
+// na linha errada (o bug do #21). Como endereça por IdParcela, acerta a linha certa.
+func TestUpdateDifCategory_WritesCellByIdParcela(t *testing.T) {
 	header := []interface{}{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
-	homRow := makeRow("Alice", "BancoBR", "Corrente", "100.00", "", "não")
+	other := makeRow("Zed", "BancoX", "Corrente", "50.00", "outra-parcela", "não")
+	target := makeRow("Alice", "BancoBR", "Corrente", "100.00", "parcela-7", "não")
 
-	repo := newMemRepo(map[string][][]interface{}{"HOM": {header, homRow}})
-	if err := newTestLogicWithRepo(t, repo).UpdateDifCategory(1, "Alimentação"); err != nil {
+	// alvo na linha 2 da HOM — um índice de DIF apontaria para a linha 1.
+	repo := newMemRepo(map[string][][]interface{}{"HOM": {header, other, target}})
+	if err := newTestLogicWithRepo(t, repo).UpdateDifCategory("parcela-7", "Alimentação"); err != nil {
 		t.Fatalf("UpdateDifCategory() error: %v", err)
 	}
 	if len(repo.written) != 1 {
 		t.Fatalf("expected 1 WriteCell call, got %d", len(repo.written))
 	}
 	w := repo.written[0]
-	if w.sheet != "HOM" || w.col != models.ColumnCategoria || w.value != "Alimentação" {
+	if w.sheet != "HOM" || w.row != 2 || w.col != models.ColumnCategoria || w.value != "Alimentação" {
 		t.Errorf("unexpected WriteCell: %+v", w)
 	}
 }
 
-func TestUpdateDifDate_WritesCell(t *testing.T) {
-	repo := newMemRepo(map[string][][]interface{}{})
-	if err := newTestLogicWithRepo(t, repo).UpdateDifDate(1, "2026-06-14"); err != nil {
+func TestUpdateDifDate_WritesCellByIdParcela(t *testing.T) {
+	header := []interface{}{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
+	other := makeRow("Zed", "BancoX", "Corrente", "50.00", "outra-parcela", "não")
+	target := makeRow("Alice", "BancoBR", "Corrente", "100.00", "parcela-7", "não")
+
+	repo := newMemRepo(map[string][][]interface{}{"HOM": {header, other, target}})
+	if err := newTestLogicWithRepo(t, repo).UpdateDifDate("parcela-7", "2026-06-14"); err != nil {
 		t.Fatalf("UpdateDifDate() error: %v", err)
 	}
 	if len(repo.written) != 1 {
 		t.Fatalf("expected 1 WriteCell call, got %d", len(repo.written))
 	}
 	w := repo.written[0]
-	if w.sheet != "HOM" || w.col != models.ColumnData || w.value != "2026-06-14" {
+	if w.sheet != "HOM" || w.row != 2 || w.col != models.ColumnData || w.value != "2026-06-14" {
 		t.Errorf("unexpected WriteCell: %+v", w)
 	}
 }
 
-func TestUpdateDifDate_NegativeIndex(t *testing.T) {
+func TestUpdateDifCategory_NotInHOM(t *testing.T) {
+	header := []interface{}{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
+	homRow := makeRow("Alice", "BancoBR", "Corrente", "100.00", "parcela-7", "não")
+	repo := newMemRepo(map[string][][]interface{}{"HOM": {header, homRow}})
+
+	err := newTestLogicWithRepo(t, repo).UpdateDifCategory("inexistente", "Alimentação")
+	if !errors.Is(err, ErrTransactionNotInHOM) {
+		t.Fatalf("expected ErrTransactionNotInHOM, got %v", err)
+	}
+	if len(repo.written) != 0 {
+		t.Errorf("expected no WriteCell, got %d", len(repo.written))
+	}
+}
+
+func TestUpdateDifDate_NotInHOM(t *testing.T) {
+	header := []interface{}{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
+	homRow := makeRow("Alice", "BancoBR", "Corrente", "100.00", "parcela-7", "não")
+	repo := newMemRepo(map[string][][]interface{}{"HOM": {header, homRow}})
+
+	err := newTestLogicWithRepo(t, repo).UpdateDifDate("inexistente", "2026-06-14")
+	if !errors.Is(err, ErrTransactionNotInHOM) {
+		t.Fatalf("expected ErrTransactionNotInHOM, got %v", err)
+	}
+	if len(repo.written) != 0 {
+		t.Errorf("expected no WriteCell, got %d", len(repo.written))
+	}
+}
+
+func TestUpdateDifCategory_EmptyIdParcela(t *testing.T) {
 	repo := newMemRepo(map[string][][]interface{}{})
-	err := newTestLogicWithRepo(t, repo).UpdateDifDate(-1, "2026-06-14")
-	if err == nil {
-		t.Error("expected error for negative index")
+	err := newTestLogicWithRepo(t, repo).UpdateDifCategory("  ", "Alimentação")
+	if !errors.Is(err, ErrEmptyIdParcela) {
+		t.Fatalf("expected ErrEmptyIdParcela, got %v", err)
+	}
+}
+
+func TestUpdateDifDate_EmptyIdParcela(t *testing.T) {
+	repo := newMemRepo(map[string][][]interface{}{})
+	err := newTestLogicWithRepo(t, repo).UpdateDifDate("", "2026-06-14")
+	if !errors.Is(err, ErrEmptyIdParcela) {
+		t.Fatalf("expected ErrEmptyIdParcela, got %v", err)
 	}
 }
 
@@ -639,21 +684,17 @@ func TestMoveAllNonRecurringDifToES_SkipsEmptyRows(t *testing.T) {
 	}
 }
 
-func TestUpdateDifCategory_OutOfBounds(t *testing.T) {
-	header := []interface{}{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
-	repo := newMemRepo(map[string][][]interface{}{"HOM": {header}})
-	err := newTestLogicWithRepo(t, repo).UpdateDifCategory(5, "Alimentação")
-	if err == nil {
-		t.Error("expected error for out-of-bounds index")
-	}
-}
-
-func TestUpdateDifCategory_EmptyRow(t *testing.T) {
+// Uma linha vazia da HOM não deve casar com um IdParcela não-vazio nem quebrar a busca.
+func TestUpdateDifCategory_SkipsEmptyHOMRow(t *testing.T) {
 	header := []interface{}{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
 	emptyRow := []interface{}{}
-	repo := newMemRepo(map[string][][]interface{}{"HOM": {header, emptyRow}})
-	err := newTestLogicWithRepo(t, repo).UpdateDifCategory(1, "Alimentação")
-	if err == nil {
-		t.Error("expected error for empty HOM row")
+	target := makeRow("Alice", "BancoBR", "Corrente", "100.00", "parcela-7", "não")
+	repo := newMemRepo(map[string][][]interface{}{"HOM": {header, emptyRow, target}})
+
+	if err := newTestLogicWithRepo(t, repo).UpdateDifCategory("parcela-7", "Alimentação"); err != nil {
+		t.Fatalf("UpdateDifCategory() error: %v", err)
+	}
+	if len(repo.written) != 1 || repo.written[0].row != 2 {
+		t.Errorf("expected WriteCell on row 2, got %+v", repo.written)
 	}
 }
