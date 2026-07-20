@@ -60,4 +60,23 @@ A partir de agora o início é **exclusivamente sob demanda**: a EC2 só liga qu
 
 **Consequência revista:** a janela de indisponibilidade de `n8n`/`waha` deixa de ser "meia-noite–06:00 BRT" e passa a ser "da meia-noite até a primeira visita do dia" — potencialmente o dia inteiro, se ninguém acessar.
 
-**Pré-requisito (resolvido em 2026-07-09):** o início sob demanda depende do **cutover de DNS** dos subdomínios para o CloudFront — sem ele, a página de fallback (servida pelo CloudFront apenas nos erros 502/504) não é alcançável, e a EC2 só ligaria manualmente (`aws ec2 start-instances`). Um incidente em 2026-07-09 (EC2 parada ~2 semanas, console inacessível) expôs exatamente isso enquanto o DNS ainda apontava para o EIP. **O cutover foi concluído em 2026-07-09**: os 3 subdomínios agora são CNAME para as distribuições CloudFront (verificado por `dig` em 2026-07-11), o que ativou o start sob demanda e o HTTPS na borda (cert ACM `*.olivinha.online`). Ressalva conhecida: o redirect automático da página de fallback após o boot da EC2 ainda não funciona (a página não redireciona sozinha) — rastreado em **#40**.
+**Pré-requisito (resolvido em 2026-07-09):** o início sob demanda depende do **cutover de DNS** dos subdomínios para o CloudFront — sem ele, a página de fallback (servida pelo CloudFront apenas nos erros 502/504) não é alcançável, e a EC2 só ligaria manualmente (`aws ec2 start-instances`). Um incidente em 2026-07-09 (EC2 parada ~2 semanas, console inacessível) expôs exatamente isso enquanto o DNS ainda apontava para o EIP. **O cutover foi concluído em 2026-07-09**: os 3 subdomínios agora são CNAME para as distribuições CloudFront (verificado por `dig` em 2026-07-11), o que ativou o start sob demanda e o HTTPS na borda (cert ACM `*.olivinha.online`). Ressalva conhecida (**resolvida em 2026-07-12** — ver seção abaixo): o redirect automático da página de fallback após o boot da EC2 não funcionava (a página não redirecionava sozinha) — corrigido em **#40**.
+
+## Atualização (2026-07-12) — redirect automático corrigido (#40)
+
+**Sintoma:** validado ao vivo em 2026-07-09, a página de fallback não redirecionava sozinha quando a EC2 terminava de subir — era preciso atualizar/navegar na mão.
+
+**Causa raiz:** o `poll()` da página redirecionava quando a resposta era `status < 500`, assumindo que o fallback devolveria 5xx enquanto a EC2 sobe. Mas o custom error response do CloudFront serve a página com **`ResponseCode: 200`** para 502/504. Enquanto o app subia, o CloudFront já devolvia **200** (a própria página S3): o poll via `200 < 500`, concluía "pronto" cedo demais e o redirect recaía na própria tela de start. A página estava correta; a config do CloudFront é que ficou incoerente com ela.
+
+**Correção (duas camadas):**
+
+1. **Página — detecção por conteúdo (código, `infra/fallback/index.html`).** O `poll()` passou a fazer `GET` (antes `HEAD`) e a redirecionar pela **ausência de um marcador** (`<meta name="olivia-fallback-page">`) no corpo, em vez de por um limiar de status. Fica imune a **qualquer** rótulo de status que o CloudFront dê ao fallback — é o conserto de raiz, que remove o acoplamento página↔config. Publicar com `scripts/deploy-fallback.sh`.
+
+2. **CloudFront — `ResponseCode` 200 → 503 (infra, complementar).** Nos custom error responses 502/504 das 3 distribuições, o `ResponseCode` passa de `200` para `503`, mantendo `ResponsePagePath: /index.html` e `ErrorCachingMinTTL: 5`. 503 (Service Unavailable) é o status correto para "iniciando" e serve de segunda camada. Aplicar com `scripts/set-fallback-error-code.sh` (as distribuições não estão em IaC; o script faz `get-distribution-config` → ajusta o JSON → `update-distribution`, é idempotente e reversível com `set-fallback-error-code.sh 200`).
+
+| Momento | CloudFront devolve | Página nova (camada 1) | Página antiga |
+|---|---|---|---|
+| App subindo | fallback com 503 (após #40) | marcador presente → espera ✅ | 503 ≥ 500 → espera ✅ |
+| App pronto | app real com 200 | marcador ausente → redireciona ✅ | 200 < 500 → redireciona ✅ |
+
+Com a página nova (camada 1) o redirect funciona **mesmo que** o CloudFront volte a devolver 200 — o marcador é o que decide. A camada 2 alinha o status à semântica e protege caso a página seja revertida. As duas são independentes: cada uma, sozinha, já corrige o #40.
