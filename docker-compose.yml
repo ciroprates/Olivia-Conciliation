@@ -78,8 +78,9 @@ services:
 
   waha:
     # Versão pinada (era `:latest`, que acumulava duplicatas `<none>` e enchia o
-    # disco). Confirmar/atualizar a tag antes do merge — ver #43.
-    image: devlikeapro/waha:2025.6.3
+    # disco). A `waha` usa esquema `<variante>-<versão>`; `latest-*` é a variante
+    # padrão (equivalente ao antigo `:latest`). Ver #43.
+    image: devlikeapro/waha:latest-2026.7.1
     restart: always
     platform: linux/amd64
     environment:
