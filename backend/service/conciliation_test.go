@@ -13,7 +13,6 @@ import (
 type memRepo struct {
 	sheets   map[string][][]interface{}
 	appended map[string][][]interface{}
-	cleared  map[string][]int
 	written  []writtenCell
 }
 
@@ -28,7 +27,6 @@ func newMemRepo(sheets map[string][][]interface{}) *memRepo {
 	return &memRepo{
 		sheets:   sheets,
 		appended: make(map[string][][]interface{}),
-		cleared:  make(map[string][]int),
 	}
 }
 
@@ -43,11 +41,6 @@ func (m *memRepo) WriteCell(sheet string, rowIdx, colIdx int, value string) erro
 
 func (m *memRepo) AppendRow(sheet string, values []interface{}) error {
 	m.appended[sheet] = append(m.appended[sheet], values)
-	return nil
-}
-
-func (m *memRepo) ClearRow(sheet string, rowIdx int) error {
-	m.cleared[sheet] = append(m.cleared[sheet], rowIdx)
 	return nil
 }
 
@@ -292,7 +285,7 @@ func TestAccept_WritesIdParcelaToES(t *testing.T) {
 	}
 }
 
-func TestReject_AppendsToREJAndClearsDIF(t *testing.T) {
+func TestReject_AppendsToREJ(t *testing.T) {
 	header := []interface{}{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J"}
 	difRow := makeRow("Bob", "BankX", "Corrente", "50.00", "parcela-99", "sim")
 
@@ -307,11 +300,10 @@ func TestReject_AppendsToREJAndClearsDIF(t *testing.T) {
 		t.Fatalf("Reject() error: %v", err)
 	}
 
+	// A DIF é gerada por fórmula: a linha some sozinha no recálculo, o backend
+	// não limpa a DIF (ver #41/#23). Só verificamos o append na REJ.
 	if len(repo.appended["REJ"]) != 1 {
 		t.Fatalf("expected 1 row appended to REJ, got %d", len(repo.appended["REJ"]))
-	}
-	if len(repo.cleared["DIF"]) != 1 || repo.cleared["DIF"][0] != 1 {
-		t.Errorf("expected DIF row 1 cleared, got %v", repo.cleared["DIF"])
 	}
 }
 
@@ -459,9 +451,6 @@ func TestMoveNonRecurringDifToES_MovesRow(t *testing.T) {
 	if len(repo.appended["ES"]) != 1 {
 		t.Errorf("expected row appended to ES, got %d", len(repo.appended["ES"]))
 	}
-	if len(repo.cleared["DIF"]) != 1 || repo.cleared["DIF"][0] != 1 {
-		t.Errorf("expected DIF row 1 cleared, got %v", repo.cleared["DIF"])
-	}
 }
 
 func TestMoveNonRecurringDifToES_RejectsRecurring(t *testing.T) {
@@ -487,9 +476,6 @@ func TestMoveNonRecurringDifToREJ_MovesRow(t *testing.T) {
 	}
 	if len(repo.appended["REJ"]) != 1 {
 		t.Errorf("expected row appended to REJ, got %d", len(repo.appended["REJ"]))
-	}
-	if len(repo.cleared["DIF"]) != 1 {
-		t.Errorf("expected DIF row cleared, got %v", repo.cleared["DIF"])
 	}
 }
 
