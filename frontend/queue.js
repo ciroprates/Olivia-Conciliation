@@ -192,9 +192,14 @@ export const queueModule = {
         return this.state.nonRecurringDif.find(item => item.difRowIndex === difRowIndex);
     },
 
-    async saveNonRecurringCategory(difRowIndex) {
-        const categoria = this.state.pendingCategoryEdits[difRowIndex];
-        if (typeof categoria !== 'string') return;
+    // saveNonRecurringField salva um campo editável (categoria/data) endereçado por
+    // IdParcela — ver docs/adr/0004. `route` é o sufixo da rota (em inglês: category/date);
+    // `field` é a chave em pt-BR usada tanto no corpo quanto no item (categoria/data);
+    // `draftKey` é o mapa de rascunhos; `label` só entra nas mensagens ao usuário. Em 404,
+    // avisa e preserva os rascunhos das outras linhas (a lista NÃO recarrega sozinha).
+    async saveNonRecurringField(difRowIndex, { route, field, draftKey, label }) {
+        const value = this.state[draftKey][difRowIndex];
+        if (typeof value !== 'string') return;
 
         const item = this.findNonRecurringItem(difRowIndex);
         if (!item || !item.idParcela) {
@@ -203,69 +208,48 @@ export const queueModule = {
         }
 
         try {
-            const res = await this.authorizedFetch(`${API_URL}/dif/non-recurring/category`, {
+            const res = await this.authorizedFetch(`${API_URL}/dif/non-recurring/${route}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ idParcela: item.idParcela, categoria })
+                body: JSON.stringify({ idParcela: item.idParcela, [field]: value })
             });
 
             if (res.status === 404) {
-                // A transação não está mais na HOM (reimport raro). Avisa e preserva os
-                // rascunhos das outras linhas — a lista NÃO recarrega sozinha.
                 alert('Essa transação não está mais na homologação — recarregue a lista.');
                 return;
             }
             if (!res.ok) {
                 const txt = await res.text();
-                throw new Error(txt || 'Falha ao salvar categoria');
+                throw new Error(txt || `Falha ao salvar ${label}`);
             }
 
             this.state.nonRecurringDif = this.state.nonRecurringDif.map(it =>
-                it.difRowIndex === difRowIndex ? { ...it, categoria } : it
+                it.difRowIndex === difRowIndex ? { ...it, [field]: value } : it
             );
-            delete this.state.pendingCategoryEdits[difRowIndex];
+            delete this.state[draftKey][difRowIndex];
             this.renderQueue(document.getElementById('search')?.value || '');
         } catch (err) {
             console.error(err);
-            alert(`Erro ao salvar categoria: ${err.message}`);
+            alert(`Erro ao salvar ${label}: ${err.message}`);
         }
     },
 
-    async saveNonRecurringDate(difRowIndex) {
-        const data = this.state.pendingDateEdits[difRowIndex];
-        if (typeof data !== 'string') return;
+    saveNonRecurringCategory(difRowIndex) {
+        return this.saveNonRecurringField(difRowIndex, {
+            route: 'category',
+            field: 'categoria',
+            draftKey: 'pendingCategoryEdits',
+            label: 'categoria',
+        });
+    },
 
-        const item = this.findNonRecurringItem(difRowIndex);
-        if (!item || !item.idParcela) {
-            alert('Transação sem identificador — recarregue a lista antes de salvar.');
-            return;
-        }
-
-        try {
-            const res = await this.authorizedFetch(`${API_URL}/dif/non-recurring/date`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ idParcela: item.idParcela, data })
-            });
-
-            if (res.status === 404) {
-                alert('Essa transação não está mais na homologação — recarregue a lista.');
-                return;
-            }
-            if (!res.ok) {
-                const txt = await res.text();
-                throw new Error(txt || 'Falha ao salvar data');
-            }
-
-            this.state.nonRecurringDif = this.state.nonRecurringDif.map(it =>
-                it.difRowIndex === difRowIndex ? { ...it, data } : it
-            );
-            delete this.state.pendingDateEdits[difRowIndex];
-            this.renderQueue(document.getElementById('search')?.value || '');
-        } catch (err) {
-            console.error(err);
-            alert(`Erro ao salvar data: ${err.message}`);
-        }
+    saveNonRecurringDate(difRowIndex) {
+        return this.saveNonRecurringField(difRowIndex, {
+            route: 'date',
+            field: 'data',
+            draftKey: 'pendingDateEdits',
+            label: 'data',
+        });
     },
 
     async copyNonRecurringToES(difRowIndex) {

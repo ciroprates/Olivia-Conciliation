@@ -297,18 +297,20 @@ func (l *Logic) findHOMRowByIdParcela(idParcela string) (int, error) {
 	return 0, ErrTransactionNotInHOM
 }
 
-func (l *Logic) UpdateDifCategory(idParcela, categoria string) error {
+// updateHOMFieldByIdParcela localiza a linha da HOM pelo IdParcela e escreve value
+// na coluna col. Base comum de UpdateDifCategory/UpdateDifDate, que só diferem na coluna.
+func (l *Logic) updateHOMFieldByIdParcela(idParcela string, col int, value string) error {
 	rowIdx, err := l.findHOMRowByIdParcela(idParcela)
 	if err != nil {
 		return err
 	}
-	return l.repo.WriteCell(l.cfg.SheetHOM, rowIdx, models.ColumnCategoria, categoria)
+	return l.repo.WriteCell(l.cfg.SheetHOM, rowIdx, col, value)
+}
+
+func (l *Logic) UpdateDifCategory(idParcela, categoria string) error {
+	return l.updateHOMFieldByIdParcela(idParcela, models.ColumnCategoria, categoria)
 }
 
 func (l *Logic) UpdateDifDate(idParcela, data string) error {
-	rowIdx, err := l.findHOMRowByIdParcela(idParcela)
-	if err != nil {
-		return err
-	}
-	return l.repo.WriteCell(l.cfg.SheetHOM, rowIdx, models.ColumnData, data)
+	return l.updateHOMFieldByIdParcela(idParcela, models.ColumnData, data)
 }
