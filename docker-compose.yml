@@ -53,7 +53,9 @@ services:
       - ./certbot/www:/var/www/certbot
 
   n8n:
-    image: n8nio/n8n
+    # Versão pinada (era `:latest`, que acumulava duplicatas `<none>` e enchia o
+    # disco). Confirmar/atualizar a tag antes do merge — ver #43.
+    image: n8nio/n8n:1.106.3
     restart: always
     environment:
       WEBHOOK_URL: https://n8n.olivinha.online
@@ -75,7 +77,9 @@ services:
           cpus: '0.25'
 
   waha:
-    image: devlikeapro/waha:latest
+    # Versão pinada (era `:latest`, que acumulava duplicatas `<none>` e enchia o
+    # disco). Confirmar/atualizar a tag antes do merge — ver #43.
+    image: devlikeapro/waha:2025.6.3
     restart: always
     platform: linux/amd64
     environment:
