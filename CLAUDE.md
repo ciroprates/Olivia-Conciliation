@@ -154,3 +154,25 @@ Push para `main` dispara `.github/workflows/ecr-push.yml`:
 1. Compila e publica as imagens Docker `backend-latest` e `frontend-latest` no AWS ECR
 2. Faz deploy na EC2 via AWS SSM (sem SSH), rodando `scripts/deploy-ec2.sh`
 3. O script de deploy gera `key.json` e `.env` na EC2 e roda `docker compose pull && docker compose up -d`
+
+## Fluxo de features
+
+Ao iniciar a implementação de uma feature ou issue, trabalhe numa **git worktree isolada** (não na pasta principal), uma por branch. A branch segue a convenção `issue/<n>-<slug>`, onde `<n>` é o número da issue no GitHub e `<slug>` um resumo curto em kebab-case (ex.: `issue/12-cloudfront-cost`).
+
+```bash
+# a partir do repo principal, criando a branch a partir de main
+git worktree add ../Olivia-issue-<n> -b issue/<n>-<slug> main
+```
+
+- Copie o `.env` para a worktree nova — não é versionado: `cp .env ../Olivia-issue-<n>/.env`. O mesmo vale para `credentials.json`/`key.json` se for rodar o backend.
+- Ao concluir (após o merge do PR), remova a worktree: `git worktree remove ../Olivia-issue-<n>`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `ciroprates/Olivia-Conciliation` (via a CLI `gh`). Veja `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Contexto único: `CONTEXT.md` + `docs/adr/` na raiz do repositório. Veja `docs/agents/domain.md`.
