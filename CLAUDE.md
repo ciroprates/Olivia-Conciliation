@@ -155,6 +155,8 @@ Push para `main` dispara `.github/workflows/ecr-push.yml`:
 2. Faz deploy na EC2 via AWS SSM (sem SSH), rodando `scripts/deploy-ec2.sh`
 3. O script de deploy gera `key.json` e `.env` na EC2 e roda `docker compose pull && docker compose up -d`
 
+> **Gotcha — push em `.github/workflows/`:** o GitHub rejeita push que crie/edite arquivos de workflow se o token não tiver o escopo `workflow` (erro `refusing to allow an OAuth App to create or update workflow ... without workflow scope`). Se você editou o workflow do CI e o push falhar assim, rode `gh auth refresh -s workflow` (fluxo interativo de device-code) e refaça o `git push`. O `gh` guarda o token no keychain, então o refresh vale para os pushes seguintes.
+
 ## Fluxo de features
 
 Ao iniciar a implementação de uma feature ou issue, trabalhe numa **git worktree isolada** (não na pasta principal), uma por branch. A branch segue a convenção `issue/<n>-<slug>`, onde `<n>` é o número da issue no GitHub e `<slug>` um resumo curto em kebab-case (ex.: `issue/12-cloudfront-cost`).
