@@ -70,7 +70,7 @@ Sistema de conciliação financeira entre o Google Sheets e a API do Pluggy. O `
 backend/
   main.go              # Servidor HTTP, registro de rotas, validação de startup
   models/models.go     # Tipos de domínio e constantes de índice de coluna da planilha
-  sheets/client.go     # Cliente da API do Google Sheets (FetchRows, WriteCell, AppendRow, ClearRow)
+  sheets/client.go     # Cliente da API do Google Sheets (FetchRows, WriteCell, AppendRow)
   handlers/auth.go     # Login, Logout, Verify, AuthMiddleware (JWT + CSRF)
   handlers/api.go      # Handlers REST para conciliação e operações da DIF
   service/conciliation.go  # Lógica de negócio: matching, aceitar, rejeitar, mover linhas
@@ -95,7 +95,7 @@ Dois fluxos distintos, um por tipo de transação na DIF. **Nota de vocabulário
 - `GET /api/conciliations` — lista linhas parceladas da DIF com contagem de candidatas
 - `GET /api/conciliations/{rowIndex}` — detalhes com as candidatas da ES
 - `POST /api/conciliations/{rowIndex}/accept` — escreve o `IdParcela` da DIF na coluna `ColumnIdParcela` da linha casada na ES
-- `POST /api/conciliations/{rowIndex}/reject` — anexa a linha da DIF na REJ e limpa a linha na DIF
+- `POST /api/conciliations/{rowIndex}/reject` — anexa a linha da DIF na REJ; a fórmula da DIF recalcula e remove a linha automaticamente (sem `ClearRow` manual)
 
 **Linhas não-parceladas da DIF** (`Recorrente=false`; *non-recurring* no código) — fluxo de revisão manual:
 - `GET /api/dif/non-recurring` — lista as linhas não-parceladas da DIF
@@ -116,7 +116,9 @@ O matching entre a DIF (referência) e a ES (candidatas) exige:
 2. `abs(DIF.Valor - ES.Valor) < 5.00`
 
 **Aceitar**: escreve o `IdParcela` da DIF na coluna `ColumnIdParcela` da linha casada na ES.
-**Rejeitar**: anexa a linha da DIF na REJ e limpa a linha da DIF (conteúdo limpo, linha não deletada, para preservar os índices de linha).
+**Rejeitar**: anexa a linha da DIF na REJ.
+
+Nenhum dos dois limpa a DIF manualmente: a DIF é gerada por uma fórmula `FILTER` que exclui os `IdParcela` já presentes na ES/REJ, então a linha some sozinha no próximo recálculo. O mesmo vale para os `move` de não-parceladas (`move-to-es`/`move-to-rej`/`move-all-to-es`). Ver #41/#23.
 
 ### Credenciais do Google Sheets
 

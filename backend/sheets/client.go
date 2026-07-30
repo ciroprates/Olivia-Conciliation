@@ -148,9 +148,3 @@ func (c *Client) AppendRow(sheetName string, values []interface{}) error {
 	}
 	return nil
 }
-
-func (c *Client) ClearRow(sheetName string, rowIndex int) error {
-	rangeStr := fmt.Sprintf("%s!A%d:ZZ%d", sheetName, rowIndex+1, rowIndex+1)
-	_, err := c.srv.Spreadsheets.Values.Clear(c.spreadsheetID, rangeStr, &sheets.ClearValuesRequest{}).Do()
-	return err
-}
