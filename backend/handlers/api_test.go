@@ -304,6 +304,25 @@ func TestUpdateNonRecurringDifCategory_NotInHOM_Returns404(t *testing.T) {
 	}
 }
 
+func TestUpdateNonRecurringDifCategory_EmptyIdParcela_Returns400(t *testing.T) {
+	repo := newFakeRepo(map[string][][]interface{}{
+		"HOM": {apiHeader, apiRow("Bob", "BankX", "Poupanca", "200.00", "parcela-7", "não")},
+	})
+	h := newAPIHandler(repo)
+	body := strings.NewReader(`{"idParcela":"","categoria":"Alimentação"}`)
+	r := httptest.NewRequest(http.MethodPatch, "/api/dif/non-recurring/category", body)
+	w := httptest.NewRecorder()
+
+	h.UpdateNonRecurringDifCategory(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(repo.written) != 0 {
+		t.Errorf("expected no WriteCell, got %+v", repo.written)
+	}
+}
+
 func TestUpdateNonRecurringDifCategory_InvalidJSON_Returns400(t *testing.T) {
 	repo := newFakeRepo(map[string][][]interface{}{})
 	h := newAPIHandler(repo)
@@ -363,6 +382,25 @@ func TestUpdateNonRecurringDifDate_NotInHOM_Returns404(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("expected 404, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestUpdateNonRecurringDifDate_EmptyIdParcela_Returns400(t *testing.T) {
+	repo := newFakeRepo(map[string][][]interface{}{
+		"HOM": {apiHeader, apiRow("Bob", "BankX", "Poupanca", "200.00", "parcela-7", "não")},
+	})
+	h := newAPIHandler(repo)
+	body := strings.NewReader(`{"idParcela":"","data":"2026-06-15"}`)
+	r := httptest.NewRequest(http.MethodPatch, "/api/dif/non-recurring/date", body)
+	w := httptest.NewRecorder()
+
+	h.UpdateNonRecurringDifDate(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(repo.written) != 0 {
+		t.Errorf("expected no WriteCell, got %+v", repo.written)
 	}
 }
 
