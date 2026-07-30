@@ -189,15 +189,22 @@ func (h *Handler) MoveAllNonRecurringDifToES(w http.ResponseWriter, r *http.Requ
 	json.NewEncoder(w).Encode(result)
 }
 
+// writeUpdateError mapeia os erros das edições da HOM (endereçadas por IdParcela)
+// para o status HTTP certo: transação ausente → 404, validação → 400, resto → 500.
+func writeUpdateError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, service.ErrTransactionNotInHOM):
+		http.Error(w, err.Error(), http.StatusNotFound)
+	case errors.Is(err, service.ErrEmptyIdParcela):
+		http.Error(w, err.Error(), http.StatusBadRequest)
+	default:
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
 func (h *Handler) UpdateNonRecurringDifCategory(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPatch {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	id, err := extractPathID(r.URL.Path, 2)
-	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
 	}
 
@@ -207,8 +214,8 @@ func (h *Handler) UpdateNonRecurringDifCategory(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if err := h.svc.UpdateDifCategory(id, req.Categoria); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := h.svc.UpdateDifCategory(req.IdParcela, req.Categoria); err != nil {
+		writeUpdateError(w, err)
 		return
 	}
 
@@ -222,20 +229,14 @@ func (h *Handler) UpdateNonRecurringDifDate(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	id, err := extractPathID(r.URL.Path, 2)
-	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
-		return
-	}
-
 	var req models.UpdateDateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if err := h.svc.UpdateDifDate(id, req.Data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := h.svc.UpdateDifDate(req.IdParcela, req.Data); err != nil {
+		writeUpdateError(w, err)
 		return
 	}
 
