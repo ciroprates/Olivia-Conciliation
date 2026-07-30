@@ -44,7 +44,7 @@
     <!-- Templates -->
     <template id="view-login">
         <div class="login-view glass">
-            <div class="login-form">
+            <form class="login-form" onsubmit="event.preventDefault(); app.login();">
                 <h2>Login</h2>
                 <p>Acesse o painel administrativo</p>
                 <div class="input-group">
@@ -55,8 +55,8 @@
                     <label>Senha</label>
                     <input type="password" id="login-pass" placeholder="Digite sua senha" class="glass-input">
                 </div>
-                <button class="btn-login" onclick="app.login()">Entrar</button>
-            </div>
+                <button type="submit" class="btn-login">Entrar</button>
+            </form>
         </div>
     </template>
 

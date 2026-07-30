@@ -149,10 +149,10 @@ func (l *Logic) Reject(difIndex int) error {
 	}
 
 	rowContent := difRows[difIndex]
-	if err := l.repo.AppendRow(l.cfg.SheetREJ, rowContent); err != nil {
-		return err
-	}
-	return l.repo.ClearRow(l.cfg.SheetDIF, difIndex)
+	// A DIF é gerada por fórmula FILTER sobre a HOM; ao anexar na REJ, a fórmula
+	// remove a linha da DIF sozinha no próximo recálculo. Limpar a DIF aqui é
+	// redundante e ineficaz (células de spill são read-only). Ver #41/#23.
+	return l.repo.AppendRow(l.cfg.SheetREJ, rowContent)
 }
 
 func (l *Logic) ListNonRecurringDIF() ([]models.NonRecurringDifSummary, error) {
@@ -208,10 +208,9 @@ func (l *Logic) MoveNonRecurringDifToES(difIndex int) error {
 		return errors.New("DIF transaction is recurring")
 	}
 
-	if err := l.repo.AppendRow(l.cfg.SheetES, rowContent); err != nil {
-		return err
-	}
-	return l.repo.ClearRow(l.cfg.SheetDIF, difIndex)
+	// A fórmula da DIF remove a linha sozinha após o AppendRow na ES; limpar a
+	// DIF aqui seria redundante e ineficaz (spill read-only). Ver #41/#23.
+	return l.repo.AppendRow(l.cfg.SheetES, rowContent)
 }
 
 func (l *Logic) MoveNonRecurringDifToREJ(difIndex int) error {
@@ -233,10 +232,9 @@ func (l *Logic) MoveNonRecurringDifToREJ(difIndex int) error {
 		return errors.New("DIF transaction is recurring")
 	}
 
-	if err := l.repo.AppendRow(l.cfg.SheetREJ, rowContent); err != nil {
-		return err
-	}
-	return l.repo.ClearRow(l.cfg.SheetDIF, difIndex)
+	// A fórmula da DIF remove a linha sozinha após o AppendRow na REJ; limpar a
+	// DIF aqui seria redundante e ineficaz (spill read-only). Ver #41/#23.
+	return l.repo.AppendRow(l.cfg.SheetREJ, rowContent)
 }
 
 func (l *Logic) MoveAllNonRecurringDifToES() (*models.NonRecurringBulkActionResult, error) {
@@ -257,10 +255,9 @@ func (l *Logic) MoveAllNonRecurringDifToES() (*models.NonRecurringBulkActionResu
 			continue
 		}
 
+		// A fórmula da DIF remove cada linha sozinha após o AppendRow na ES;
+		// limpar a DIF aqui seria redundante e ineficaz. Ver #41/#23.
 		if err := l.repo.AppendRow(l.cfg.SheetES, rowContent); err != nil {
-			return nil, err
-		}
-		if err := l.repo.ClearRow(l.cfg.SheetDIF, i); err != nil {
 			return nil, err
 		}
 		moved++

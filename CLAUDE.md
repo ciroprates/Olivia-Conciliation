@@ -70,7 +70,7 @@ Sistema de conciliação financeira entre o Google Sheets e a API do Pluggy. O `
 backend/
   main.go              # Servidor HTTP, registro de rotas, validação de startup
   models/models.go     # Tipos de domínio e constantes de índice de coluna da planilha
-  sheets/client.go     # Cliente da API do Google Sheets (FetchRows, WriteCell, AppendRow, ClearRow)
+  sheets/client.go     # Cliente da API do Google Sheets (FetchRows, WriteCell, AppendRow)
   handlers/auth.go     # Login, Logout, Verify, AuthMiddleware (JWT + CSRF)
   handlers/api.go      # Handlers REST para conciliação e operações da DIF
   service/conciliation.go  # Lógica de negócio: matching, aceitar, rejeitar, mover linhas
@@ -95,7 +95,7 @@ Dois fluxos distintos, um por tipo de transação na DIF. **Nota de vocabulário
 - `GET /api/conciliations` — lista linhas parceladas da DIF com contagem de candidatas
 - `GET /api/conciliations/{rowIndex}` — detalhes com as candidatas da ES
 - `POST /api/conciliations/{rowIndex}/accept` — escreve o `IdParcela` da DIF na coluna `ColumnIdParcela` da linha casada na ES
-- `POST /api/conciliations/{rowIndex}/reject` — anexa a linha da DIF na REJ e limpa a linha na DIF
+- `POST /api/conciliations/{rowIndex}/reject` — anexa a linha da DIF na REJ; a fórmula da DIF recalcula e remove a linha automaticamente (sem `ClearRow` manual)
 
 **Linhas não-parceladas da DIF** (`Recorrente=false`; *non-recurring* no código) — fluxo de revisão manual:
 - `GET /api/dif/non-recurring` — lista as linhas não-parceladas da DIF
@@ -118,7 +118,9 @@ O matching entre a DIF (referência) e a ES (candidatas) exige:
 2. `abs(DIF.Valor - ES.Valor) < 5.00`
 
 **Aceitar**: escreve o `IdParcela` da DIF na coluna `ColumnIdParcela` da linha casada na ES.
-**Rejeitar**: anexa a linha da DIF na REJ e limpa a linha da DIF (conteúdo limpo, linha não deletada, para preservar os índices de linha).
+**Rejeitar**: anexa a linha da DIF na REJ.
+
+Nenhum dos dois limpa a DIF manualmente: a DIF é gerada por uma fórmula `FILTER` que exclui os `IdParcela` já presentes na ES/REJ, então a linha some sozinha no próximo recálculo. O mesmo vale para os `move` de não-parceladas (`move-to-es`/`move-to-rej`/`move-all-to-es`). Ver #41/#23.
 
 ### Credenciais do Google Sheets
 
@@ -156,3 +158,27 @@ Push para `main` dispara `.github/workflows/ecr-push.yml`:
 1. Compila e publica as imagens Docker `backend-latest` e `frontend-latest` no AWS ECR
 2. Faz deploy na EC2 via AWS SSM (sem SSH), rodando `scripts/deploy-ec2.sh`
 3. O script de deploy gera `key.json` e `.env` na EC2 e roda `docker compose pull && docker compose up -d`
+
+> **Gotcha — push em `.github/workflows/`:** o GitHub rejeita push que crie/edite arquivos de workflow se o token não tiver o escopo `workflow` (erro `refusing to allow an OAuth App to create or update workflow ... without workflow scope`). Se você editou o workflow do CI e o push falhar assim, rode `gh auth refresh -s workflow` (fluxo interativo de device-code) e refaça o `git push`. O `gh` guarda o token no keychain, então o refresh vale para os pushes seguintes.
+
+## Fluxo de features
+
+Ao iniciar a implementação de uma feature ou issue, trabalhe numa **git worktree isolada** (não na pasta principal), uma por branch. A branch segue a convenção `issue/<n>-<slug>`, onde `<n>` é o número da issue no GitHub e `<slug>` um resumo curto em kebab-case (ex.: `issue/12-cloudfront-cost`).
+
+```bash
+# a partir do repo principal, criando a branch a partir de main
+git worktree add ../Olivia-issue-<n> -b issue/<n>-<slug> main
+```
+
+- Copie o `.env` para a worktree nova — não é versionado: `cp .env ../Olivia-issue-<n>/.env`. O mesmo vale para `credentials.json`/`key.json` se for rodar o backend.
+- Ao concluir (após o merge do PR), remova a worktree: `git worktree remove ../Olivia-issue-<n>`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for `ciroprates/Olivia-Conciliation` (via a CLI `gh`). Veja `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Contexto único: `CONTEXT.md` + `docs/adr/` na raiz do repositório. Veja `docs/agents/domain.md`.

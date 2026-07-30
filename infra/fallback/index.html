@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Marcador de identidade desta página: o poll() o usa para saber quando a
+       resposta deixou de ser a página de fallback e passou a ser o app real (#40). -->
+  <meta name="olivia-fallback-page" content="starting">
   <title>Olivia — Iniciando</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -77,6 +80,9 @@
 
   <script>
     const LAMBDA_URL = 'https://kebjn6uy6l.execute-api.us-east-1.amazonaws.com/';
+    // Marca presente no <meta> desta página (e ausente no app real). O poll()
+    // redireciona quando a resposta NÃO contém mais esta marca. Ver #40.
+    const FALLBACK_MARKER = 'olivia-fallback-page';
 
     async function iniciar() {
       const token = document.getElementById('token').value.trim();
@@ -120,8 +126,14 @@
       while (true) {
         await sleep(5000);
         try {
-          const r = await fetch(base, { method: 'HEAD', cache: 'no-cache' });
-          if (r.status < 500) {
+          // Enquanto a EC2 sobe, o CloudFront devolve ESTA página de fallback
+          // (custom error 502/504). Detectamos "app pronto" pela AUSÊNCIA do
+          // marcador no corpo — não pelo status code: o CloudFront rotula a
+          // página de fallback como 200 (ou 503, após #40), então o status
+          // sozinho não distingue "subindo" de "pronto". Ver #40 e ADR-0002.
+          const r = await fetch(base, { method: 'GET', cache: 'no-cache' });
+          const html = await r.text();
+          if (!html.includes(FALLBACK_MARKER)) {
             window.location.href = base;
             return;
           }

@@ -85,6 +85,36 @@ sudo docker builder prune -f || true
 
 echo "Puxando novas imagens e reiniciando containers..."
 sudo docker compose pull
+
+# 6.2 Guarda de portas: garante que 80/443 estão livres ANTES do `up -d`.
+# Um Caddy órfão instalado no host (systemd) tomava 80/443 a cada boot,
+# impedindo o nginx do compose de bindar e derrubando prod. Aqui paramos e
+# desabilitamos qualquer serviço de host conhecido que conflite; se, ainda
+# assim, alguma das portas seguir ocupada por processo fora do Docker,
+# falhamos cedo com mensagem clara em vez de deixar o `up -d` quebrar.
+echo "Verificando se as portas 80/443 estão livres para o nginx..."
+for svc in caddy apache2 httpd; do
+    if systemctl list-unit-files 2>/dev/null | grep -q "^${svc}\.service"; then
+        echo "Serviço de host '${svc}' encontrado — parando e desabilitando..."
+        sudo systemctl stop "$svc" || true
+        sudo systemctl disable "$svc" || true
+    fi
+done
+
+port_owner() {
+    # Lista PIDs (fora do Docker) escutando na porta $1, ou vazio se livre.
+    sudo ss -ltnpH "sport = :$1" 2>/dev/null | grep -v 'docker\|containerd' || true
+}
+
+for port in 80 443; do
+    if [ -n "$(port_owner "$port")" ]; then
+        echo "ERRO: a porta $port já está ocupada por um processo fora do Docker:" >&2
+        port_owner "$port" >&2
+        echo "Libere a porta (ex.: pare/desinstale o serviço de host) e rode o deploy novamente." >&2
+        exit 1
+    fi
+done
+
 sudo docker compose up -d
 
 # 6.1 Recarrega o Nginx para atualizar resolução de upstreams após recriação de containers

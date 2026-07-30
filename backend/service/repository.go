@@ -6,5 +6,4 @@ type SheetRepository interface {
 	FetchRows(sheet string) ([][]interface{}, error)
 	WriteCell(sheet string, rowIdx, colIdx int, value string) error
 	AppendRow(sheet string, values []interface{}) error
-	ClearRow(sheet string, rowIdx int) error
 }

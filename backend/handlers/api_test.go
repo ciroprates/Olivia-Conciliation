@@ -16,19 +16,13 @@ import (
 type fakeRepo struct {
 	sheets   map[string][][]interface{}
 	appended map[string][][]interface{}
-	cleared  map[string][]int
-	written  []struct {
-		sheet    string
-		row, col int
-		value    string
-	}
+	written  []struct{ sheet string; row, col int; value string }
 }
 
 func newFakeRepo(sheets map[string][][]interface{}) *fakeRepo {
 	return &fakeRepo{
 		sheets:   sheets,
 		appended: make(map[string][][]interface{}),
-		cleared:  make(map[string][]int),
 	}
 }
 
@@ -47,11 +41,6 @@ func (f *fakeRepo) AppendRow(sheet string, values []interface{}) error {
 	f.appended[sheet] = append(f.appended[sheet], values)
 	return nil
 }
-func (f *fakeRepo) ClearRow(sheet string, row int) error {
-	f.cleared[sheet] = append(f.cleared[sheet], row)
-	return nil
-}
-
 func newAPIHandler(repo *fakeRepo) *Handler {
 	cfg := config.Config{SheetDIF: "DIF", SheetES: "ES", SheetREJ: "REJ", SheetHOM: "HOM"}
 	svc := service.NewLogic(repo, cfg)
