@@ -101,6 +101,25 @@ for svc in caddy apache2 httpd; do
     fi
 done
 
+# Remoção DEFINITIVA do Caddy órfão (resíduo da era `olivinha.site`).
+# Parar/desabilitar não basta: enquanto o pacote e o unit file existirem, um
+# `enable` acidental ou um reinstall traz o proxy de host de volta às portas
+# 80/443 (ver #35). Este bloco é idempotente e best-effort — desinstala o
+# pacote e apaga config/unit residuais, para que um deploy limpo reconcilie o
+# host de vez. Nenhum passo pode derrubar o deploy (`|| true`).
+if command -v caddy >/dev/null 2>&1 || systemctl list-unit-files 2>/dev/null | grep -q '^caddy\.service' || [ -d /etc/caddy ]; then
+    echo "Removendo Caddy órfão do host de forma definitiva..."
+    if command -v dnf >/dev/null 2>&1; then
+        sudo dnf remove -y caddy || true
+    elif command -v yum >/dev/null 2>&1; then
+        sudo yum remove -y caddy || true
+    fi
+    # Resíduos que sobrevivem à remoção do pacote (ou instalações via binário).
+    sudo rm -f /etc/systemd/system/caddy.service /usr/lib/systemd/system/caddy.service || true
+    sudo rm -rf /etc/caddy || true
+    sudo systemctl daemon-reload || true
+fi
+
 port_owner() {
     # Lista PIDs (fora do Docker) escutando na porta $1, ou vazio se livre.
     sudo ss -ltnpH "sport = :$1" 2>/dev/null | grep -v 'docker\|containerd' || true
