@@ -171,7 +171,11 @@ git worktree add ../Olivia-issue-<n> -b issue/<n>-<slug> main
 ```
 
 - Copie o `.env` para a worktree nova — não é versionado: `cp .env ../Olivia-issue-<n>/.env`. O mesmo vale para `credentials.json`/`key.json` se for rodar o backend.
-- Ao concluir (após o merge do PR), remova a worktree: `git worktree remove ../Olivia-issue-<n>`.
+- Ao concluir (após o merge do PR), limpe:
+  - Remova a worktree: `git worktree remove ../Olivia-issue-<n>`.
+  - Apague a branch local: `git branch -d issue/<n>-<slug>`.
+  - Sincronize as referências: `git fetch --prune`.
+  - A branch **remota** é apagada automaticamente no merge (o repo tem *Automatically delete head branches* ligado — `deleteBranchOnMerge`), então não precisa apagá-la na mão.
 
 ## Agent skills
 
