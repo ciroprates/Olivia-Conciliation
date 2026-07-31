@@ -13,8 +13,6 @@ const app = Object.assign(
             currentView: 'queue',
             conciliations: [],
             nonRecurringDif: [],
-            details: null,
-            selectedCandidates: new Set(),
             currentExecution: null,
             executionHistory: [],
             statusPollingInterval: null,
@@ -22,7 +20,11 @@ const app = Object.assign(
             pendingCategoryEdits: {},
             pendingDateEdits: {},
             notificationTimeoutId: null,
-            notificationHideTimeoutId: null
+            notificationHideTimeoutId: null,
+            activeTab: 'conc',
+            concSelected: new Set(),
+            impSelected: new Set(),
+            importPopoverOpen: false
         },
 
         async init() {
@@ -46,32 +48,19 @@ const app = Object.assign(
                 return;
             }
 
+            // 'queue' renderiza o layout de abas (Conciliação + Importação).
+            // O nome interno da view segue 'queue' para não tocar em auth.js /
+            // execution.js, que reagem a `currentView === 'queue'`.
             if (view === 'queue') {
-                const template = document.getElementById('view-queue').content.cloneNode(true);
+                const template = document.getElementById('view-tabs').content.cloneNode(true);
                 main.innerHTML = '';
                 main.appendChild(template);
+                this.state.concSelected = new Set();
+                this.state.impSelected = new Set();
+                this.state.activeTab = 'conc';
                 this.initializeExecutionOptionsUI();
+                this.switchTab('conc');
                 this.loadQueue();
-
-                const searchInput = document.getElementById('search');
-                if (searchInput) {
-                    searchInput.addEventListener('input', (e) => {
-                        this.renderQueue(e.target.value);
-                    });
-                }
-
-                const copyAllBtn = document.getElementById('btn-copy-all-non-recurring');
-                if (copyAllBtn) {
-                    copyAllBtn.addEventListener('click', () => this.copyAllNonRecurringToES());
-                }
-            } else if (view === 'details') {
-                const template = document.getElementById('view-details').content.cloneNode(true);
-                main.innerHTML = '';
-                main.appendChild(template);
-                document.getElementById('btn-back')?.addEventListener('click', () => this.navigate('queue'));
-                document.getElementById('btn-reject')?.addEventListener('click', () => this.rejectCurrent());
-                document.getElementById('btn-accept-selection')?.addEventListener('click', () => this.acceptSelection());
-                this.renderDetails();
             }
         },
     },
@@ -83,6 +72,12 @@ const app = Object.assign(
     executionModule,
 );
 
-// Expose on window so inline HTML event handlers (app.login(), app.toggleCandidate()) work.
+// Expose on window so inline HTML event handlers (app.login(), app.switchTab()) work.
 window.app = app;
+
+// Fecha o popover de importação ao clicar fora da barra de importação.
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.import-bar')) app.closeImportPopover();
+});
+
 app.init();

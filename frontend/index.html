@@ -21,10 +21,6 @@
                     <p class="subtitle">Gerencie suas pendências de forma bonitinha!</p>
                 </div>
                 <div class="header-actions">
-                    <button id="btn-process" class="btn-process hidden" onclick="app.startTransactionProcessing()">
-                        <span class="icon">⚡</span>
-                        Processar Transações
-                    </button>
                     <div id="status-indicator" class="status-indicator hidden" onclick="app.openStatusModal()">
                         <span class="pulse"></span>
                         <span id="status-text">Processando...</span>
@@ -60,75 +56,80 @@
         </div>
     </template>
 
-    <template id="view-queue">
-        <div class="queue-view">
-            <div class="filters">
-                <input type="text" id="search" placeholder="Buscar por Dono, Banco ou Valor..." class="glass-input">
-                <div class="stats">
-                    <span id="pending-count">0 pendentes</span>
-                </div>
-            </div>
-            <div class="execution-options glass-panel">
-                <div class="execution-options-header">
-                    <h3>Configuração da execução</h3>
-                    <button type="button" class="btn-ghost" id="btn-options-reset">Restaurar padrão</button>
-                </div>
-                <div class="execution-options-grid">
-                    <div class="option-group">
-                        <label for="opt-start-date">Data inicial</label>
-                        <input type="date" id="opt-start-date" class="glass-input option-date">
+    <!-- Layout de abas full-screen: Conciliação + Importação (issue #6) -->
+    <template id="view-tabs">
+        <div class="tabs-view">
+            <!-- Barra de importação: configurações + processar -->
+            <div class="import-bar">
+                <span class="import-bar-label">Importar</span>
+                <button type="button" class="setting-chip" onclick="app.toggleImportPopover()">📅 <span id="chip-date">–</span></button>
+                <div class="bar-sep"></div>
+                <button type="button" class="setting-chip" onclick="app.toggleImportPopover()">🚫 <span id="chip-excl">–</span></button>
+                <div class="bar-spacer"></div>
+                <button id="btn-process" class="btn-process" onclick="app.startTransactionProcessing()">
+                    <span class="icon">⚡</span> Processar Transações
+                </button>
+                <div class="import-popover" id="import-popover">
+                    <div class="pop-title">Configurações de importação</div>
+                    <div class="pop-field">
+                        <label for="opt-start-date">Data inicial da busca</label>
+                        <input type="date" class="pop-date" id="opt-start-date">
                         <small id="opt-start-date-error" class="option-error hidden"></small>
                     </div>
-                    <div class="option-group">
-                        <span class="option-label">Categorias para excluir</span>
-                        <label class="option-check">
-                            <input type="checkbox" id="opt-exclude-same-person" value="Same person transfer">
-                            <span>Same person transfer</span>
-                        </label>
-                        <label class="option-check">
-                            <input type="checkbox" id="opt-exclude-credit-card" value="Credit card payment">
-                            <span>Credit card payment</span>
-                        </label>
+                    <div class="pop-field">
+                        <label>Categorias a excluir</label>
+                        <div class="pop-checks">
+                            <label class="pop-check"><input type="checkbox" id="opt-exclude-same-person" value="Same person transfer"> Same person transfer</label>
+                            <label class="pop-check"><input type="checkbox" id="opt-exclude-credit-card" value="Credit card payment"> Credit card payment</label>
+                        </div>
+                    </div>
+                    <p id="execution-options-summary" class="execution-options-summary"></p>
+                    <div class="pop-actions">
+                        <button type="button" class="btn btn-ghost" id="btn-options-reset">Restaurar padrão</button>
+                        <button type="button" class="btn btn-accept" onclick="app.closeImportPopover()">Fechar</button>
                     </div>
                 </div>
-                <p id="execution-options-summary" class="execution-options-summary"></p>
             </div>
-            <div class="card-list" id="conciliation-list">
-                <!-- Items -->
+
+            <!-- Navegação das abas -->
+            <div class="tabs-nav">
+                <button type="button" class="tab-btn active" id="tab-btn-conc" onclick="app.switchTab('conc')">
+                    Conciliação
+                    <span class="tab-count cnt-conc" id="cnt-conc">0</span>
+                </button>
+                <button type="button" class="tab-btn" id="tab-btn-imp" onclick="app.switchTab('imp')">
+                    Importação
+                    <span class="tab-count cnt-imp" id="cnt-imp">0</span>
+                </button>
             </div>
-            <section class="non-recurring-panel glass-panel" id="non-recurring-panel">
-                <div class="non-recurring-header">
-                    <h3>Transações não recorrentes</h3>
-                    <span id="non-recurring-count">0 itens</span>
-                </div>
-                <div class="non-recurring-list" id="non-recurring-list"></div>
-                <div class="non-recurring-actions">
-                    <button type="button" class="btn-accept" id="btn-copy-all-non-recurring">Copiar todas</button>
-                </div>
-            </section>
-        </div>
-    </template>
 
-    <template id="view-details">
-        <div class="details-view">
-            <button class="btn-back" id="btn-back">← Voltar</button>
-
-            <div class="split-view">
-                <div class="reference-card glass-panel">
-                    <h2>Referência (DIF)</h2>
-                    <div id="ref-details"></div>
-                    <div class="actions">
-                        <button class="btn-reject" id="btn-reject">Rejeitar Referência</button>
-                    </div>
+            <!-- Barra de seleção em lote (Conciliação) -->
+            <div class="batch-bar" id="batch-bar">
+                <div class="chk" id="batch-chk-all" onclick="app.toggleConcAll()"></div>
+                <span class="batch-label">
+                    <strong id="conc-sel-count">0</strong> de <strong id="conc-total">0</strong> selecionadas
+                </span>
+                <div class="batch-actions">
+                    <button type="button" class="btn btn-concil" id="btn-concil-lote" disabled onclick="app.acceptSelectedConciliations()">Conciliar lote</button>
+                    <button type="button" class="btn btn-reject" id="btn-reject-lote" disabled onclick="app.rejectSelectedConciliations()">Rejeitar lote</button>
                 </div>
+            </div>
 
-                <div class="candidates-card glass-panel">
-                    <h2>Candidatas (ES)</h2>
-                    <div class="candidates-list" id="candidates-list"></div>
-                    <div class="actions">
-                        <button class="btn-accept" id="btn-accept-selection">Aceitar Seleção</button>
-                    </div>
+            <!-- Corpo rolável das abas -->
+            <div class="tabs-scroll">
+                <div class="tab-panel active" id="tab-conc">
+                    <div class="tab-body" id="conc-body"></div>
                 </div>
+                <div class="tab-panel" id="tab-imp">
+                    <div class="tab-body" id="imp-body"></div>
+                </div>
+            </div>
+
+            <!-- Barra de ação flutuante (Importação) -->
+            <div class="action-bar off" id="imp-action-bar">
+                <span class="action-label" id="imp-sel-lbl">0 selecionadas</span>
+                <button type="button" class="btn btn-copy-sel" id="imp-copy-btn" onclick="app.copySelectedImport()">Copiar 0</button>
+                <button type="button" class="btn btn-ghost" onclick="app.clearImportSelection()">Limpar</button>
             </div>
         </div>
     </template>
