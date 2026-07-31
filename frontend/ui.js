@@ -46,6 +46,43 @@ export const uiModule = {
             .replace(/'/g, '&#039;');
     },
 
+    // ── Helpers de exibição do layout de abas (issue #6) ──
+
+    formatCurrency(value) {
+        return 'R$ ' + Number(value || 0).toFixed(2).replace('.', ',');
+    },
+
+    // txId é gerado no cliente a partir do rowIndex (a API não retorna id) —
+    // ver convenção de `txId` na issue #6. Ex.: DIF-5, ES-34, REC-12, NRC-8.
+    formatTxId(prefix, rowIndex) {
+        return `${prefix}-${rowIndex}`;
+    },
+
+    // idParcela tem o formato `<hash>/<num>`; exibimos só `/<num>` no badge.
+    parcelaSuffix(idParcela) {
+        if (!idParcela) return '';
+        const slash = String(idParcela).lastIndexOf('/');
+        return slash >= 0 ? String(idParcela).slice(slash) : '';
+    },
+
+    // Δ entre o valor da DIF e o da candidata ES. A API não retorna score de
+    // match; a proximidade de valor é o sinal visível (regra de matching: < 5,00).
+    deltaHtml(difValue, esValue) {
+        const d = Number(difValue || 0) - Number(esValue || 0);
+        if (Math.abs(d) < 0.01) return '<span class="delta-zero">= exato</span>';
+        const sign = d > 0 ? '+' : '−';
+        const cls = d > 0 ? 'delta-pos' : 'delta-neg';
+        return `<span class="${cls}">${sign}${this.formatCurrency(Math.abs(d))}</span>`;
+    },
+
+    categoryColor(cat) {
+        const COLORS = {
+            'Alimentação': '#fb923c', 'Lazer': '#a78bfa', 'Moradia': '#60a5fa',
+            'Saúde': '#34d399', 'Transporte': '#f472b6', 'Outros': '#94a3b8'
+        };
+        return COLORS[cat] || '#94a3b8';
+    },
+
     syncAuthUI() {
         const isAuthenticatedView = this.state.authenticated && this.state.currentView !== 'login';
         const processBtn = document.getElementById('btn-process');

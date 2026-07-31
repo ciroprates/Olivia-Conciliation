@@ -8,12 +8,31 @@ export const queueModule = {
                 this.authorizedFetch(`${API_URL}/dif/non-recurring`)
             ]);
 
-            const conciliations = await conciliationsRes.json();
-            const nonRecurring = await nonRecurringRes.json();
-            this.state.conciliations = conciliations || [];
-            this.state.nonRecurringDif = nonRecurring || [];
+            const summaries = (await conciliationsRes.json()) || [];
+            const nonRecurring = (await nonRecurringRes.json()) || [];
+
+            // GET /api/conciliations traz só o resumo (com candidateCount), sem a
+            // candidata nem a categoria da referência. O layout de abas exibe a
+            // melhor candidata inline e agrupa por categoria, então enriquecemos
+            // cada linha com GET /conciliations/{i}. São poucas pendências por vez,
+            // então buscamos os detalhes em paralelo — o N+1 é aceitável aqui.
+            const enriched = await Promise.all(summaries.map(async (s) => {
+                try {
+                    const res = await this.authorizedFetch(`${API_URL}/conciliations/${s.difRowIndex}`);
+                    const detail = await res.json();
+                    const ref = detail?.reference || {};
+                    const candidate = (detail?.candidates && detail.candidates[0]) || null;
+                    return { ...s, categoria: ref.categoria || 'Outros', candidate };
+                } catch {
+                    return { ...s, categoria: 'Outros', candidate: null };
+                }
+            }));
+
+            this.state.conciliations = enriched;
+            this.state.nonRecurringDif = nonRecurring;
             this.state.pendingCategoryEdits = {};
             this.state.pendingDateEdits = {};
+            this.pruneSelections();
             this.renderQueue();
         } catch (err) {
             console.error(err);
@@ -23,154 +42,411 @@ export const queueModule = {
         }
     },
 
-    renderQueue(filter = '') {
-        const list = document.getElementById('conciliation-list');
-        const countSpan = document.getElementById('pending-count');
-        if (!list) return;
-
-        list.innerHTML = '';
-        const search = filter.toLowerCase();
-
-        const filtered = this.state.conciliations.filter(c =>
-            c.dono.toLowerCase().includes(search) ||
-            c.banco.toLowerCase().includes(search) ||
-            c.valor.toString().includes(search)
-        );
-
-        countSpan.textContent = `${filtered.length} pendentes`;
-
-        filtered.forEach(item => {
-            const el = document.createElement('div');
-            el.className = 'conciliation-item';
-            el.innerHTML = `
-                <div class="item-info">
-                    <h3>${item.descricao}</h3>
-                    <div class="item-meta">
-                        <span class="badge">${item.dono}</span>
-                        <span>${item.banco}</span>
-                        <span>${item.data}</span>
-                    </div>
-                </div>
-                <div class="item-value">
-                    <div style="text-align: right; font-weight: bold; font-size: 1.2rem;">
-                        R$ ${item.valor.toFixed(2)}
-                    </div>
-                    <div class="candidates-count" style="text-align: right; font-size: 0.9rem;">
-                        ${item.candidateCount} candidatas
-                    </div>
-                </div>
-            `;
-            el.onclick = () => this.loadDetails(item.difRowIndex);
-            list.appendChild(el);
-        });
-
-        this.renderNonRecurringList(search);
+    // Remove das seleções em lote os índices que não existem mais após um reload.
+    pruneSelections() {
+        const concIds = new Set(this.state.conciliations.map(c => c.difRowIndex));
+        this.state.concSelected = new Set([...this.state.concSelected].filter(id => concIds.has(id)));
+        const impIds = new Set(this.state.nonRecurringDif.map(c => c.difRowIndex));
+        this.state.impSelected = new Set([...this.state.impSelected].filter(id => impIds.has(id)));
     },
 
-    renderNonRecurringList(search = '') {
-        const panel = document.getElementById('non-recurring-panel');
-        const list = document.getElementById('non-recurring-list');
-        const count = document.getElementById('non-recurring-count');
-        const copyAllBtn = document.getElementById('btn-copy-all-non-recurring');
-        if (!panel || !list || !count || !copyAllBtn) return;
+    renderQueue() {
+        this.renderConc();
+        this.renderImport();
+        const cntConc = document.getElementById('cnt-conc');
+        if (cntConc) cntConc.textContent = this.state.conciliations.length;
+        const cntImp = document.getElementById('cnt-imp');
+        if (cntImp) cntImp.textContent = this.state.nonRecurringDif.length;
+    },
 
-        const items = (this.state.nonRecurringDif || []).filter(item => {
-            if (!search) return true;
-            return item.dono.toLowerCase().includes(search) ||
-                item.banco.toLowerCase().includes(search) ||
-                item.valor.toString().includes(search) ||
-                item.descricao.toLowerCase().includes(search);
-        });
+    // ── Aba: navegação e popover de importação ──
+    switchTab(tab) {
+        this.state.activeTab = tab;
+        const isConc = tab === 'conc';
+        document.getElementById('tab-btn-conc')?.classList.toggle('active', isConc);
+        document.getElementById('tab-btn-imp')?.classList.toggle('active', !isConc);
+        document.getElementById('tab-conc')?.classList.toggle('active', isConc);
+        document.getElementById('tab-imp')?.classList.toggle('active', !isConc);
+        const batchBar = document.getElementById('batch-bar');
+        if (batchBar) batchBar.style.display = isConc ? 'flex' : 'none';
+        const impBar = document.getElementById('imp-action-bar');
+        if (impBar) impBar.classList.toggle('off', isConc || this.state.impSelected.size === 0);
+    },
 
-        count.textContent = `${items.length} itens`;
-        list.innerHTML = '';
-        panel.classList.toggle('hidden', items.length === 0);
-        copyAllBtn.disabled = items.length === 0;
+    toggleImportPopover() {
+        this.state.importPopoverOpen = !this.state.importPopoverOpen;
+        document.getElementById('import-popover')?.classList.toggle('open', this.state.importPopoverOpen);
+    },
 
-        items.forEach(item => {
-            const row = document.createElement('article');
-            row.className = 'non-recurring-item';
-            const categoriaAtual = this.getCategoryDraft(item);
-            const hasUnsavedCategory = categoriaAtual !== (item.categoria || '');
-            const dataAtual = this.getDateDraft(item);
-            const hasUnsavedDate = dataAtual !== (item.data || '');
+    closeImportPopover() {
+        this.state.importPopoverOpen = false;
+        document.getElementById('import-popover')?.classList.remove('open');
+    },
 
-            row.innerHTML = `
-                <div class="non-recurring-main">
-                    <div class="non-recurring-title">${this.escapeHtml(item.descricao || '-')}</div>
-                    <div class="non-recurring-meta">
-                        <span>${this.escapeHtml(item.dono || '-')}</span>
-                        <span>${this.escapeHtml(item.banco || '-')}</span>
-                        <span>${this.escapeHtml(item.data || '-')}</span>
-                        <span>R$ ${(item.valor || 0).toFixed(2)}</span>
+    // ════════════════════════════════════════════
+    // Aba Conciliação — tabela agrupada por categoria
+    // ════════════════════════════════════════════
+    renderConc() {
+        const body = document.getElementById('conc-body');
+        if (!body) return;
+
+        const items = this.state.conciliations;
+        if (items.length === 0) {
+            body.innerHTML = '<p class="empty-state">Nenhuma parcela pendente de conciliação. 🎉</p>';
+            this.updateBatchBar();
+            return;
+        }
+
+        const cats = [...new Set(items.map(r => r.categoria))].sort();
+        let rows = '';
+        for (const cat of cats) {
+            const color = this.categoryColor(cat);
+            rows += `<tr class="tbl-cat-hdr"><td colspan="6"><div class="cat-hdr-content">
+                <span class="cat-hdr-dot" style="background:${color}"></span>${this.escapeHtml(cat)}
+                <div class="cat-hdr-line"></div></div></td></tr>`;
+            for (const r of items.filter(x => x.categoria === cat)) rows += this.renderConcRow(r);
+        }
+
+        body.innerHTML = `<table class="tbl">
+            <thead class="tbl-head"><tr>
+                <th style="width:32px"></th>
+                <th>Transação DIF</th>
+                <th style="width:28px"></th>
+                <th>Melhor candidata ES</th>
+                <th style="text-align:right;white-space:nowrap">Valor / Δ</th>
+                <th>Ações</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table>`;
+        this.updateBatchBar();
+    },
+
+    renderConcRow(r) {
+        const isSel = this.state.concSelected.has(r.difRowIndex);
+        const c = r.candidate;
+        const difTxId = this.formatTxId('DIF', r.difRowIndex);
+        const parc = this.parcelaSuffix(r.idParcela);
+        const count = r.candidateCount || 0;
+
+        const esBlock = c ? `
+            <div class="tx-meta" style="margin-bottom:.22rem">
+                <span class="tx-id">${this.formatTxId('ES', c.rowIndex)}</span>
+                <span class="parc-badge parc-full">${count} candidata${count !== 1 ? 's' : ''}</span>
+            </div>
+            <div class="tx-name">${this.escapeHtml(c.descricao)}</div>
+            <div class="tx-meta" style="margin-top:.18rem">
+                <span class="date-badge">📅 ${this.escapeHtml(c.data)}</span>
+                <span class="muted">${this.escapeHtml(c.dono)} · ${this.escapeHtml(c.banco)}</span>
+            </div>` : '<span class="no-cand">Sem candidata encontrada</span>';
+
+        return `<tr data-cid="${r.difRowIndex}" class="${isSel ? 'row-selected' : ''}">
+            <td><div class="chk${isSel ? ' on' : ''}" onclick="app.toggleConcItem(${r.difRowIndex})"></div></td>
+            <td>
+                <div class="tx-meta" style="margin-bottom:.22rem">
+                    <span class="tx-id">${difTxId}</span>
+                    ${parc ? `<span class="parc-badge parc-partial">${this.escapeHtml(parc)}</span>` : ''}
+                </div>
+                <div class="tx-name">${this.escapeHtml(r.descricao)}</div>
+                <div class="tx-meta" style="margin-top:.18rem">
+                    <span class="date-badge">📅 ${this.escapeHtml(r.data)}</span>
+                    <span class="muted">${this.escapeHtml(r.dono)} · ${this.escapeHtml(r.banco)}</span>
+                </div>
+            </td>
+            <td class="arrow-col">→</td>
+            <td>${esBlock}</td>
+            <td style="text-align:right;white-space:nowrap">
+                <div class="val-sm">${this.formatCurrency(r.valor)}</div>
+                ${c ? `<div style="margin-top:.22rem">${this.deltaHtml(r.valor, c.valor)}</div>` : ''}
+            </td>
+            <td>
+                <div class="tbl-actions">
+                    ${c ? `<button class="btn btn-concil" onclick="app.acceptConciliation(${r.difRowIndex}, ${c.rowIndex})">Conciliar</button>` : ''}
+                    <button class="btn btn-reject" onclick="app.rejectConciliation(${r.difRowIndex})">Rejeitar</button>
+                    <button class="edit-btn" id="cebtn-${r.difRowIndex}" onclick="app.toggleConcEdit(${r.difRowIndex})">✏ cat.</button>
+                </div>
+            </td>
+        </tr>
+        <tr class="cat-edit-row" id="cedit-${r.difRowIndex}">
+            <td colspan="6">
+                <div class="cat-edit-inner">
+                    <span class="muted" style="white-space:nowrap;font-size:.76rem">Categoria de <strong style="color:var(--text-main)">${difTxId}</strong></span>
+                    <input class="cat-inp" id="ccat-${r.difRowIndex}" value="${this.escapeHtml(r.categoria)}" style="max-width:220px">
+                    <button class="btn save-cat-btn" onclick="app.saveConciliationCategory(${r.difRowIndex})">Salvar</button>
+                    <button class="btn btn-ghost" onclick="app.toggleConcEdit(${r.difRowIndex})">Cancelar</button>
+                </div>
+            </td>
+        </tr>`;
+    },
+
+    toggleConcItem(difRowIndex) {
+        const set = this.state.concSelected;
+        if (set.has(difRowIndex)) set.delete(difRowIndex); else set.add(difRowIndex);
+        this.renderConc();
+    },
+
+    toggleConcAll() {
+        const ids = this.state.conciliations.map(r => r.difRowIndex);
+        const allOn = ids.length > 0 && ids.every(id => this.state.concSelected.has(id));
+        this.state.concSelected = new Set(allOn ? [] : ids);
+        this.renderConc();
+    },
+
+    updateBatchBar() {
+        const n = this.state.concSelected.size;
+        const total = this.state.conciliations.length;
+        const selCount = document.getElementById('conc-sel-count');
+        if (selCount) selCount.textContent = n;
+        const totalEl = document.getElementById('conc-total');
+        if (totalEl) totalEl.textContent = total;
+        const allChk = document.getElementById('batch-chk-all');
+        if (allChk) {
+            allChk.classList.toggle('on', n > 0 && n === total);
+            allChk.style.opacity = n > 0 && n < total ? '0.6' : '1';
+        }
+        const cLote = document.getElementById('btn-concil-lote');
+        if (cLote) cLote.disabled = n === 0;
+        const rLote = document.getElementById('btn-reject-lote');
+        if (rLote) rLote.disabled = n === 0;
+    },
+
+    toggleConcEdit(difRowIndex) {
+        const row = document.getElementById(`cedit-${difRowIndex}`);
+        const btn = document.getElementById(`cebtn-${difRowIndex}`);
+        if (!row) return;
+        const open = row.classList.toggle('open');
+        if (btn) btn.classList.toggle('open', open);
+    },
+
+    // Edição de categoria endereçada por IdParcela (ver docs/adr/0004): escreve na
+    // HOM, e a fórmula recalcula a DIF. Rota real: PATCH /dif/non-recurring/category
+    // — a rota `/{difRowIndex}/category` citada na issue #6 é anterior ao ADR 0004.
+    async saveConciliationCategory(difRowIndex) {
+        const input = document.getElementById(`ccat-${difRowIndex}`);
+        const item = this.state.conciliations.find(c => c.difRowIndex === difRowIndex);
+        if (!input || !item) return;
+        if (!item.idParcela) {
+            this.showNotification('Transação sem identificador — recarregue a lista.', 'error');
+            return;
+        }
+        const value = input.value;
+        try {
+            const res = await this.authorizedFetch(`${API_URL}/dif/non-recurring/category`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ idParcela: item.idParcela, categoria: value })
+            });
+            if (res.status === 404) {
+                this.showNotification('Transação não está mais na homologação — recarregue.', 'error');
+                return;
+            }
+            if (!res.ok) {
+                const txt = await res.text();
+                throw new Error(txt || 'Falha ao salvar categoria');
+            }
+            item.categoria = value;
+            this.renderConc();
+            this.showNotification(`Categoria atualizada para "${value}".`, 'success');
+        } catch (err) {
+            console.error(err);
+            this.showNotification(`Erro ao salvar categoria: ${err.message}`, 'error');
+        }
+    },
+
+    async acceptSelectedConciliations() {
+        const items = [...this.state.concSelected]
+            .map(id => this.state.conciliations.find(c => c.difRowIndex === id))
+            .filter(c => c && c.candidate);
+        if (items.length === 0) {
+            this.showNotification('Nenhuma das selecionadas tem candidata para conciliar.', 'error');
+            return;
+        }
+        if (!confirm(`Conciliar ${items.length} parcela(s) com a melhor candidata?`)) return;
+
+        let ok = 0, fail = 0;
+        for (const c of items) {
+            try {
+                const res = await this.authorizedFetch(`${API_URL}/conciliations/${c.difRowIndex}/accept`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ esRowIndices: [c.candidate.rowIndex] })
+                });
+                if (res.ok) ok++; else fail++;
+            } catch { fail++; }
+        }
+        this.state.concSelected = new Set();
+        this.showNotification(`${ok} conciliada(s)${fail ? `, ${fail} com erro` : ''}.`, fail ? 'error' : 'success');
+        await this.loadQueue();
+    },
+
+    async rejectSelectedConciliations() {
+        const ids = [...this.state.concSelected];
+        if (ids.length === 0) return;
+        if (!confirm(`Rejeitar ${ids.length} parcela(s)? Serão movidas para REJ.`)) return;
+
+        let ok = 0, fail = 0;
+        for (const id of ids) {
+            try {
+                const res = await this.authorizedFetch(`${API_URL}/conciliations/${id}/reject`, { method: 'POST' });
+                if (res.ok) ok++; else fail++;
+            } catch { fail++; }
+        }
+        this.state.concSelected = new Set();
+        this.showNotification(`${ok} rejeitada(s)${fail ? `, ${fail} com erro` : ''}.`, fail ? 'error' : 'success');
+        await this.loadQueue();
+    },
+
+    // ════════════════════════════════════════════
+    // Aba Importação — cards REC (idParcela) + NRC (sem idParcela)
+    // ════════════════════════════════════════════
+    renderImport() {
+        const body = document.getElementById('imp-body');
+        if (!body) return;
+
+        const all = this.state.nonRecurringDif || [];
+        if (all.length === 0) {
+            body.innerHTML = '<p class="empty-state">Nenhuma transação para importar. 🎉</p>';
+            this.updateImportActionBar();
+            return;
+        }
+
+        // REC = recorrente para cópia (tem idParcela, é a 1ª do conjunto);
+        // NRC = não-recorrente (idParcela vazio). Ambos vêm do mesmo endpoint.
+        const rec = all.filter(r => r.idParcela);
+        const nrc = all.filter(r => !r.idParcela);
+
+        const allIds = all.map(r => r.difRowIndex);
+        const allOn = allIds.length > 0 && allIds.every(id => this.state.impSelected.has(id));
+
+        body.innerHTML = `
+            <div class="sel-all-row">
+                <div class="chk${allOn ? ' on' : ''}" onclick="app.toggleImportAll()"></div>
+                <span class="sel-label">Selecionar todas · <strong>${allIds.length} transações</strong></span>
+                <button class="btn btn-copy-sel" style="margin-left:auto" onclick="app.copyAllNonRecurringToES()">Copiar todas para ES</button>
+            </div>
+            ${this.renderImportSection('REC', 'Parcelas completas (incluindo 1ª)', rec, true)}
+            ${this.renderImportSection('N.REC', 'Não recorrentes', nrc, false)}`;
+        this.updateImportActionBar();
+    },
+
+    renderImportSection(pill, title, arr, isRec) {
+        if (arr.length === 0) return '';
+        const pillCls = isRec ? 'pill-copy' : 'pill-nonr';
+        const cats = [...new Set(arr.map(r => r.categoria || 'Outros'))].sort();
+        let sections = '';
+        for (const cat of cats) {
+            const color = this.categoryColor(cat);
+            let cards = '';
+            for (const r of arr.filter(x => (x.categoria || 'Outros') === cat)) cards += this.renderImportCard(r, isRec);
+            sections += `<div class="imp-cat-hdr"><span class="imp-cat-dot" style="background:${color}"></span>${this.escapeHtml(cat)}<div class="imp-sub-hdr-line"></div></div><div class="imp-list">${cards}</div>`;
+        }
+        return `<div class="imp-sub-hdr"><span class="pill ${pillCls}">${pill}</span>${title}<div class="imp-sub-hdr-line"></div><span class="pill pill-gray">${arr.length}</span></div>${sections}`;
+    },
+
+    renderImportCard(r, isRec) {
+        const isSel = this.state.impSelected.has(r.difRowIndex);
+        const txId = this.formatTxId(isRec ? 'REC' : 'NRC', r.difRowIndex);
+        const parc = this.parcelaSuffix(r.idParcela);
+        const badge = isRec
+            ? `<span class="parc-badge parc-full">${this.escapeHtml(parc || 'parcela')}</span>`
+            : `<span class="parc-badge parc-nonr">${this.escapeHtml(r.data || '')}</span>`;
+        // Categoria/data são editadas por IdParcela (ADR 0004); sem id estável (NRC),
+        // não há como endereçar a HOM, então a edição inline só aparece para REC.
+        const canEdit = !!r.idParcela;
+        const catValue = this.getCategoryDraft(r);
+        const dateValue = this.getDateDraft(r);
+
+        return `<div class="imp-card${isSel ? ' selected' : ''}" data-id="${r.difRowIndex}">
+            <div class="imp-main">
+                <div class="chk${isSel ? ' on' : ''}" onclick="app.toggleImportItem(${r.difRowIndex})"></div>
+                <div class="imp-info">
+                    <div class="imp-meta" style="margin-bottom:.2rem">
+                        <span class="tx-id">${txId}</span>
+                        ${badge}
+                    </div>
+                    <div class="imp-name">${this.escapeHtml(r.descricao || '-')}</div>
+                    <div class="imp-meta" style="margin-top:.18rem">
+                        <span class="date-badge">📅 ${this.escapeHtml(r.data || '-')}</span>
+                        <span class="muted">${this.escapeHtml(r.dono || '-')} · ${this.escapeHtml(r.banco || '-')}</span>
                     </div>
                 </div>
-                <div class="non-recurring-category">
-                    <label for="cat-${item.difRowIndex}">
-                        Categoria
-                        <span class="unsaved-indicator ${hasUnsavedCategory ? '' : 'hidden'}">não salvo</span>
-                    </label>
-                    <input id="cat-${item.difRowIndex}" type="text" class="glass-input non-recurring-category-input" value="${this.escapeHtml(categoriaAtual)}">
-                    <button type="button" class="btn-ghost" data-action="save-category" data-id="${item.difRowIndex}" ${hasUnsavedCategory ? '' : 'disabled'}>Salvar categoria</button>
+                <div class="imp-right">
+                    <span class="imp-val">${this.formatCurrency(r.valor)}</span>
+                    <div class="imp-btns">
+                        ${canEdit ? `<button class="edit-btn" id="imp-eb-${r.difRowIndex}" onclick="app.toggleImportEdit(${r.difRowIndex})">✏ cat.</button>` : ''}
+                        <button class="btn btn-accept" onclick="app.copyNonRecurringToES(${r.difRowIndex})">Copiar</button>
+                        <button class="btn btn-reject" onclick="app.rejectNonRecurringToREJ(${r.difRowIndex})">Rej.</button>
+                    </div>
                 </div>
-                <div class="non-recurring-date">
-                    <label for="date-${item.difRowIndex}">
-                        Data
-                        <span class="unsaved-indicator date-unsaved-indicator ${hasUnsavedDate ? '' : 'hidden'}">não salvo</span>
-                    </label>
-                    <input id="date-${item.difRowIndex}" type="date" class="glass-input" value="${this.escapeHtml(dataAtual)}">
-                    <button type="button" class="btn-ghost" data-action="save-date" data-id="${item.difRowIndex}" ${hasUnsavedDate ? '' : 'disabled'}>Salvar data</button>
+            </div>
+            ${canEdit ? `
+            <div class="imp-expand" id="imp-exp-${r.difRowIndex}">
+                <div class="imp-expand-inner">
+                    <input class="cat-inp" id="cat-${r.difRowIndex}" value="${this.escapeHtml(catValue)}" placeholder="Categoria">
+                    <button class="btn save-cat-btn" onclick="app.saveNonRecurringCategory(${r.difRowIndex})">Salvar cat.</button>
+                    <input class="cat-inp" type="date" id="date-${r.difRowIndex}" value="${this.escapeHtml(dateValue)}" style="max-width:150px">
+                    <button class="btn save-cat-btn" onclick="app.saveNonRecurringDate(${r.difRowIndex})">Salvar data</button>
                 </div>
-                <div class="non-recurring-row-actions">
-                    <button type="button" class="btn-accept" data-action="move-es" data-id="${item.difRowIndex}">Copiar</button>
-                    <button type="button" class="btn-reject" data-action="move-rej" data-id="${item.difRowIndex}">Rejeitar</button>
-                </div>
-            `;
+            </div>` : ''}
+        </div>`;
+    },
 
-            const categoryInput = row.querySelector(`#cat-${item.difRowIndex}`);
-            const unsavedIndicator = row.querySelector('.unsaved-indicator');
-            const saveCategoryButton = row.querySelector('button[data-action="save-category"]');
-            if (categoryInput) {
-                categoryInput.addEventListener('input', (e) => {
-                    const nextValue = e.target.value;
-                    this.state.pendingCategoryEdits[item.difRowIndex] = nextValue;
-                    const changed = nextValue !== (item.categoria || '');
-                    if (unsavedIndicator) unsavedIndicator.classList.toggle('hidden', !changed);
-                    if (saveCategoryButton) saveCategoryButton.disabled = !changed;
-                });
-            }
-            if (saveCategoryButton) {
-                saveCategoryButton.addEventListener('click', () => this.saveNonRecurringCategory(item.difRowIndex));
-            }
+    toggleImportItem(difRowIndex) {
+        const set = this.state.impSelected;
+        if (set.has(difRowIndex)) set.delete(difRowIndex); else set.add(difRowIndex);
+        const card = document.querySelector(`.imp-card[data-id="${difRowIndex}"]`);
+        if (card) {
+            const on = set.has(difRowIndex);
+            card.classList.toggle('selected', on);
+            card.querySelector('.chk')?.classList.toggle('on', on);
+        }
+        this.updateImportActionBar();
+    },
 
-            const dateInput = row.querySelector(`#date-${item.difRowIndex}`);
-            const dateUnsavedIndicator = row.querySelector('.date-unsaved-indicator');
-            const saveDateButton = row.querySelector('button[data-action="save-date"]');
-            if (dateInput) {
-                dateInput.addEventListener('input', (e) => {
-                    const nextValue = e.target.value;
-                    this.state.pendingDateEdits[item.difRowIndex] = nextValue;
-                    const changed = nextValue !== (item.data || '');
-                    if (dateUnsavedIndicator) dateUnsavedIndicator.classList.toggle('hidden', !changed);
-                    if (saveDateButton) saveDateButton.disabled = !changed;
-                });
-            }
-            if (saveDateButton) {
-                saveDateButton.addEventListener('click', () => this.saveNonRecurringDate(item.difRowIndex));
-            }
+    toggleImportAll() {
+        const ids = (this.state.nonRecurringDif || []).map(r => r.difRowIndex);
+        const allOn = ids.length > 0 && ids.every(id => this.state.impSelected.has(id));
+        this.state.impSelected = new Set(allOn ? [] : ids);
+        this.renderImport();
+    },
 
-            const moveEsBtn = row.querySelector('button[data-action="move-es"]');
-            if (moveEsBtn) {
-                moveEsBtn.addEventListener('click', () => this.copyNonRecurringToES(item.difRowIndex));
-            }
+    toggleImportEdit(difRowIndex) {
+        const exp = document.getElementById(`imp-exp-${difRowIndex}`);
+        const btn = document.getElementById(`imp-eb-${difRowIndex}`);
+        if (!exp) return;
+        const open = exp.classList.toggle('open');
+        if (btn) btn.classList.toggle('open', open);
+    },
 
-            const moveRejBtn = row.querySelector('button[data-action="move-rej"]');
-            if (moveRejBtn) {
-                moveRejBtn.addEventListener('click', () => this.rejectNonRecurringToREJ(item.difRowIndex));
-            }
+    updateImportActionBar() {
+        const n = this.state.impSelected.size;
+        const bar = document.getElementById('imp-action-bar');
+        if (bar) bar.classList.toggle('off', n === 0 || this.state.activeTab !== 'imp');
+        const lbl = document.getElementById('imp-sel-lbl');
+        if (lbl) lbl.textContent = `${n} selecionada${n !== 1 ? 's' : ''}`;
+        const btn = document.getElementById('imp-copy-btn');
+        if (btn) btn.textContent = `Copiar ${n}`;
+    },
 
-            list.appendChild(row);
-        });
+    clearImportSelection() {
+        this.state.impSelected = new Set();
+        this.renderImport();
+    },
+
+    async copySelectedImport() {
+        const ids = [...this.state.impSelected];
+        if (ids.length === 0) return;
+        if (!confirm(`Copiar ${ids.length} transação(ões) para ES?`)) return;
+
+        let ok = 0, fail = 0;
+        for (const id of ids) {
+            try {
+                const res = await this.authorizedFetch(`${API_URL}/dif/non-recurring/${id}/move-to-es`, { method: 'POST' });
+                if (res.ok) ok++; else fail++;
+            } catch { fail++; }
+        }
+        this.state.impSelected = new Set();
+        this.showNotification(`${ok} copiada(s) para ES${fail ? `, ${fail} com erro` : ''}.`, fail ? 'error' : 'success');
+        await this.loadQueue();
     },
 
     getCategoryDraft(item) {
@@ -193,17 +469,17 @@ export const queueModule = {
     },
 
     // saveNonRecurringField salva um campo editável (categoria/data) endereçado por
-    // IdParcela — ver docs/adr/0004. `route` é o sufixo da rota (em inglês: category/date);
-    // `field` é a chave em pt-BR usada tanto no corpo quanto no item (categoria/data);
-    // `draftKey` é o mapa de rascunhos; `label` só entra nas mensagens ao usuário. Em 404,
-    // avisa e preserva os rascunhos das outras linhas (a lista NÃO recarrega sozinha).
-    async saveNonRecurringField(difRowIndex, { route, field, draftKey, label }) {
-        const value = this.state[draftKey][difRowIndex];
-        if (typeof value !== 'string') return;
+    // IdParcela — ver docs/adr/0004. `route` é o sufixo da rota (category/date);
+    // `field` é a chave em pt-BR (categoria/data); `inputId` é o prefixo do id do
+    // input no DOM (cat/date). Em 404, avisa e não recarrega (preserva o resto).
+    async saveNonRecurringField(difRowIndex, { route, field, label, inputId }) {
+        const input = document.getElementById(`${inputId}-${difRowIndex}`);
+        if (!input) return;
+        const value = input.value;
 
         const item = this.findNonRecurringItem(difRowIndex);
         if (!item || !item.idParcela) {
-            alert('Transação sem identificador — recarregue a lista antes de salvar.');
+            this.showNotification('Transação sem identificador — recarregue antes de salvar.', 'error');
             return;
         }
 
@@ -215,7 +491,7 @@ export const queueModule = {
             });
 
             if (res.status === 404) {
-                alert('Essa transação não está mais na homologação — recarregue a lista.');
+                this.showNotification('Essa transação não está mais na homologação — recarregue.', 'error');
                 return;
             }
             if (!res.ok) {
@@ -226,29 +502,23 @@ export const queueModule = {
             this.state.nonRecurringDif = this.state.nonRecurringDif.map(it =>
                 it.difRowIndex === difRowIndex ? { ...it, [field]: value } : it
             );
-            delete this.state[draftKey][difRowIndex];
-            this.renderQueue(document.getElementById('search')?.value || '');
+            this.renderImport();
+            this.showNotification(`${label[0].toUpperCase()}${label.slice(1)} atualizada.`, 'success');
         } catch (err) {
             console.error(err);
-            alert(`Erro ao salvar ${label}: ${err.message}`);
+            this.showNotification(`Erro ao salvar ${label}: ${err.message}`, 'error');
         }
     },
 
     saveNonRecurringCategory(difRowIndex) {
         return this.saveNonRecurringField(difRowIndex, {
-            route: 'category',
-            field: 'categoria',
-            draftKey: 'pendingCategoryEdits',
-            label: 'categoria',
+            route: 'category', field: 'categoria', label: 'categoria', inputId: 'cat',
         });
     },
 
     saveNonRecurringDate(difRowIndex) {
         return this.saveNonRecurringField(difRowIndex, {
-            route: 'date',
-            field: 'data',
-            draftKey: 'pendingDateEdits',
-            label: 'data',
+            route: 'date', field: 'data', label: 'data', inputId: 'date',
         });
     },
 
@@ -261,11 +531,11 @@ export const queueModule = {
                 const txt = await res.text();
                 throw new Error(txt || 'Falha ao copiar para ES');
             }
-
+            this.showNotification('Transação copiada para ES.', 'success');
             await this.loadQueue();
         } catch (err) {
             console.error(err);
-            alert(`Erro ao copiar para ES: ${err.message}`);
+            this.showNotification(`Erro ao copiar para ES: ${err.message}`, 'error');
         }
     },
 
@@ -280,18 +550,18 @@ export const queueModule = {
                 const txt = await res.text();
                 throw new Error(txt || 'Falha ao mover para REJ');
             }
-
+            this.showNotification('Transação movida para REJ.', 'success');
             await this.loadQueue();
         } catch (err) {
             console.error(err);
-            alert(`Erro ao mover para REJ: ${err.message}`);
+            this.showNotification(`Erro ao mover para REJ: ${err.message}`, 'error');
         }
     },
 
     async copyAllNonRecurringToES() {
         const total = (this.state.nonRecurringDif || []).length;
         if (total === 0) return;
-        if (!confirm(`Copiar ${total} linha(s) de DIF não recorrente para ES?`)) return;
+        if (!confirm(`Copiar ${total} transação(ões) não recorrente(s) para ES?`)) return;
 
         try {
             const res = await this.authorizedFetch(`${API_URL}/dif/non-recurring/move-all-to-es`, {
@@ -301,17 +571,17 @@ export const queueModule = {
                 const txt = await res.text();
                 throw new Error(txt || 'Falha ao copiar todas para ES');
             }
-
             const payload = await this.parseResponseSafely(res);
             const moved = payload.data?.movedToES ?? total;
-            alert(`${moved} linha(s) copiada(s) para ES.`);
+            this.showNotification(`${moved} transação(ões) copiada(s) para ES.`, 'success');
             await this.loadQueue();
         } catch (err) {
             console.error(err);
-            alert(`Erro ao copiar todas para ES: ${err.message}`);
+            this.showNotification(`Erro ao copiar todas para ES: ${err.message}`, 'error');
         }
     },
 
+    // ── Opções de execução (barra de importação / popover) ──
     loadExecutionOptions() {
         const fallback = { ...DEFAULT_EXECUTION_OPTIONS };
         try {
@@ -425,12 +695,19 @@ export const queueModule = {
     },
 
     renderExecutionOptionsSummary(options) {
-        const summaryEl = document.getElementById('execution-options-summary');
-        if (!summaryEl) return;
-
         const date = options.startDate ? new Date(`${options.startDate}T00:00:00`).toLocaleDateString('pt-BR') : '-';
         const excludedCount = (options.excludeCategories || []).length;
-        summaryEl.textContent = `Data inicial: ${date} | ${excludedCount} categoria(s) excluída(s)`;
+
+        const summaryEl = document.getElementById('execution-options-summary');
+        if (summaryEl) summaryEl.textContent = `Data inicial: ${date} | ${excludedCount} categoria(s) excluída(s)`;
+
+        // Reflete a config nos chips compactos da barra de importação.
+        const chipDate = document.getElementById('chip-date');
+        if (chipDate) chipDate.textContent = date;
+        const chipExcl = document.getElementById('chip-excl');
+        if (chipExcl) chipExcl.textContent = excludedCount === 0
+            ? 'nenhuma excluída'
+            : `${excludedCount} categ. excluída${excludedCount > 1 ? 's' : ''}`;
     },
 
     isValidISODate(value) {
