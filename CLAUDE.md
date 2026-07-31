@@ -171,6 +171,7 @@ git worktree add ../Olivia-issue-<n> -b issue/<n>-<slug> main
 ```
 
 - Copie o `.env` para a worktree nova — não é versionado: `cp .env ../Olivia-issue-<n>/.env`. O mesmo vale para `credentials.json`/`key.json` se for rodar o backend.
+- **Entrega:** ao concluir, faça commit na branch da worktree, **abra um PR** contra `main` e passe para o usuário revisar/mergear. **Não faça o merge você mesmo** — o merge em `main` dispara o deploy em produção (ver [CI/CD](#cicd)).
 - Ao concluir (após o merge do PR), limpe:
   - Remova a worktree: `git worktree remove ../Olivia-issue-<n>`.
   - Apague a branch local: `git branch -d issue/<n>-<slug>`.
