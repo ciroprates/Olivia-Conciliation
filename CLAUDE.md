@@ -146,11 +146,16 @@ COOKIE_SECURE=false
 COOKIE_DOMAIN=
 ```
 
-Para o dev local do frontend, fixe no `frontend/app.js`:
-```js
-const API_URL = 'http://localhost:8080/api';
-const EXECUTION_API_URL = 'http://localhost:3000/v1/executions';
+O frontend usa caminhos **relativos** (`API_URL = '/api'`, `EXECUTION_API_URL = '/executions'` em `frontend/constants.js`) e o backend **não emite CORS** — então servir o frontend numa origem separada do backend quebra. Para rodar sem Docker, use o proxy same-origin de dev (`scripts/dev-proxy.go`), que replica o papel do nginx localmente:
+
+```bash
+go run backend/main.go            # backend em :8080
+go run scripts/dev-proxy.go       # serve o frontend + proxy /api,/executions em :3001
 ```
+
+Abra `http://localhost:3001`. O `/executions` aponta para `:3000` por padrão (o `olivia-api` local); veja o cabeçalho do `scripts/dev-proxy.go` para apontá-lo a produção.
+
+> ⚠️ O `.env` local usa o `SHEET_SPREADSHEET_ID` de produção, então a conciliação local **escreve na planilha real** (abas ES/REJ).
 
 ### CI/CD
 

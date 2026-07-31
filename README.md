@@ -33,11 +33,32 @@ O `olivia-api` consome o Pluggy e popula a aba **HOM** no Google Sheets. Uma fó
 
 ## Rodando
 
+Em qualquer um dos caminhos, você precisa antes:
+
+- Um `.env` (`cp .env.example .env`) com os valores obrigatórios preenchidos — em especial o `SHEET_SPREADSHEET_ID`.
+- A chave da service account do Google como `key.json` na raiz (o `.env` aponta `GOOGLE_APPLICATION_CREDENTIALS=key.json`).
+
+> ⚠️ O `SHEET_SPREADSHEET_ID` é o da planilha real. Rodando local, a conciliação (aceitar/rejeitar) **escreve na planilha de produção** (abas ES/REJ). Use uma planilha de teste se não quiser tocar nos dados reais.
+
+### Stack completa (Docker)
+
 ```bash
-cp .env.example .env
-# preencha os valores obrigatórios (marcados com # obrigatório no .env.example)
 docker compose up -d
 ```
+
+O nginx sobe como proxy e serve tudo same-origin em `http://localhost` (`/api` → backend, `/executions` → `olivia-api`).
+
+### Sem Docker (backend + frontend)
+
+O frontend usa caminhos relativos (`/api`, `/executions`) e o backend não emite CORS, então o frontend precisa ser servido na **mesma origem** que a API. O helper `scripts/dev-proxy.go` faz esse papel (equivalente ao nginx):
+
+```bash
+# defina no .env: APP_ORIGIN=http://localhost:3001, COOKIE_SECURE=false, COOKIE_DOMAIN=
+go run backend/main.go            # backend em :8080
+go run scripts/dev-proxy.go       # frontend + proxy /api,/executions em :3001
+```
+
+Abra `http://localhost:3001`. O `/executions` aponta para `:3000` (o `olivia-api` local) por padrão — veja o cabeçalho de `scripts/dev-proxy.go` para outras opções.
 
 ## Variáveis de ambiente
 
